@@ -1,0 +1,1 @@
+swig -c++ -python fdints.i ; gcc -c -fpic fdints_wrap.cxx fdints.cpp -I/home/zach/.pyenv/versions/3.9.13/include/python3.9; python setup.py build_ext --inplace

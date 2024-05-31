@@ -1,0 +1,32 @@
+Compile and produce object file by:
+
+gcc -o fdints.out -L/usr/local/lib fermi_integrals.cpp -lgsl -lgslcblas -lm
+
+run with:
+
+./fdints.out
+
+____________________________________________________
+
+DISCLAIMER: Finally worked only by adding gsl library location information to setup.py
+
+Now with swig: (see https://www.swig.org/Doc1.3/Python.html#Python_nn4)
+
+run swig
+	swig -c++ -python fdints.i 
+Creates fdints_wrap.c, fdints.py
+
+now make position independent (necessary here?)
+	gcc -c -fpic fdints_wrap.cxx fdints.cpp -I/home/zach/.pyenv/versions/3.9.13/include/python3.9
+
+Lastly, make shared object using python disutils
+	python setup.py build_ext --inplace
+
+//(Instead of python build) Lastly, link objects as shared object (like dll), but .so 
+	//Broken?
+	//gcc -shared fdints.o fdints_wrap.o -o _fdints.so
+	//gcc -shared -o _fdints.so fdints.o fdints_wrap.o 
+
+Together:
+	swig -c++ -python fdints.i ; gcc -c -fpic fdints_wrap.cxx fdints.cpp -I/home/zach/.pyenv/versions/3.9.13/include/python3.9; python setup.py build_ext --inplace
+
