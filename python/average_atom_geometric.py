@@ -100,7 +100,6 @@ class NeutralPseudoAtom(Atom):
 		print("Generating NPA")
 		self.Te = Te
 		self.Ti = Ti
-		self.TF = ThomasFermi(self.Te)
 
 		self.rs = rs
 		self.R = R
@@ -113,7 +112,14 @@ class NeutralPseudoAtom(Atom):
 
 		self.WSvol = 4/3*π*self.rs**3
 		self.Vol   = 4/3*π*self.R**3
+		
+		# Whether to include xc, mainly because libxc is an absolute pain
+		self.TF = ThomasFermi(self.Te, ignore_vxc = ignore_vxc )
 		self.ignore_vxc = ignore_vxc
+		if ignore_vxc == False:
+			self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
+			self.vxc_f = np.vectorize(self.vxc_f)
+
 		self.μ_init = μ_init
 		
 		if Zstar_init =='More':
@@ -129,16 +135,8 @@ class NeutralPseudoAtom(Atom):
 		# Instantiate 1-D grid and ThomasFermi
 		print("	Intializing grid")
 		self.grid = NonUniformGrid(rmin, R, Npoints, self.rs)
-		# self.vxc_f = self.TF.fast_vxc()
-		self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
-		self.vxc_f = np.vectorize(self.vxc_f)
 		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
 		self.make_fast_n_TF()
-
-		# For comparison, get George Petrov AA data
-		# print("Loading Data for Comparison (from George Petrov)")
-		# self.petrov = petrov_atom(self.Z,self.A,self.T,self.rs)
-		# self.petrov.make_densities('/home/zach/plasma/atomic_forces/GordonKim/data/TFDW-eta=1-Te=1.dat')
 
 		# Gradient Corrections
 		self.gradient_correction = gradient_correction
@@ -273,7 +271,7 @@ class NeutralPseudoAtom(Atom):
 		"""
 		
 		# Use approximate density based on plasma electron density, ignoring unknown W correction
-		eta_approx = 1/self.Te*(self.μ + self.φe + self.φion - self.vxc_f(self.ne_bar))
+		eta_approx = 1/self.Te*(self.μ + self.φe + self.φion)
 		
 		self.ne_init = self.fast_n_TF( eta_approx ) #self.Z/self.WSvol*self.grid.ones
 		
@@ -425,7 +423,10 @@ class NeutralPseudoAtom(Atom):
 			nf = np.where(nf<=1e-30, 1e-30, nf)
 
 		etas = self.TF.η_interp(nf) # η = β( μ + self.φe + self.φion - self.vxc_f(ne)  )         
-		totφ_pseudo = etas*self.Te + self.vxc_f(nf) - self.vxc_f(self.ne_bar)  - self.μ # total potential that must be acting on nf
+		if self.ignore_vxc:
+			totφ_pseudo = etas*self.Te - self.μ # total potential that must be acting on nf
+		else:
+			totφ_pseudo = etas*self.Te + self.vxc_f(nf) - self.vxc_f(self.ne_bar)  - self.μ # total potential that must be acting on nf
 		φe_from_nf, _ = self.get_φe( (-nf + self.ρi)  ) # potential from nf itself
 
 		φ_pseudo = (totφ_pseudo - φe_from_nf)

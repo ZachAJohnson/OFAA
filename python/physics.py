@@ -178,12 +178,13 @@ class FermiDirac():
 
 
 class ThomasFermi():
-	def __init__(self, T):
+	def __init__(self, T, ignore_vxc = False):
 		self.T = T
 		self.η_interp = self.make_η()
 		self.η_interp = np.vectorize(self.η_interp)
 
-		self.vxc_func = self.fast_vxc()
+		if ignore_vxc == False:
+			self.vxc_func = self.fast_vxc()
 		self.hλ_func = self.fast_hλ()
 		
 		self.hλprime_func = lambda η: (self.hλ_func(η*(1+1e-5))-self.hλ_func(η*(1-1e-5)))/(2*1e-5)
@@ -280,7 +281,7 @@ class ThomasFermi():
 		"""
 		Exchange correlation energy density for electron gas
 		"""
-		libxc_func  = pylibxc.LibXCFunctional("LDA_XC_GDSMFB",'unpolarized')
+		libxc_func  = pylibxc.LibXCFunctional("LDA_XC_KSDT",'unpolarized')
 		dfdrho  = lambda rho: libxc_func.compute({'rho':rho})['zk'][0,0]
 		vdfdrho = np.vectorize(dfdrho)
 		return dfdrho(rho)
