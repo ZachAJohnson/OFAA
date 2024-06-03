@@ -3,17 +3,94 @@ from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import gamma
 
-from atomic_forces.fdints import fdints
+from ..fdints import fdints
 import pylibxc
 
 import matplotlib.pyplot as plt
 
-from hnc.hnc.misc import Fermi_Energy, n_from_rs, Debye_length
 from hnc.hnc.constants import *
 
 eV=0.0367512
 π = np.pi
 
+
+
+def Fermi_Energy(ne):
+    E_F = 1/(2*m_e) * (3*π**2 * ne)**(2/3)
+    return E_F
+
+def Fermi_velocity(ne):
+    v_F = np.sqrt(2*Fermi_Energy(ne)/m_e)
+    return v_F
+
+def Fermi_wavenumber(ne):
+    k_F = Fermi_velocity(ne)*m_e
+    return k_F
+
+def Degeneracy_Parameter(Te, ne):
+    θ = Te/Fermi_Energy(ne)
+    return θ
+
+def Gamma(T, n, Z):
+    β = 1/T
+    rs = rs_from_n(n)
+    return Z**2*β/rs
+
+def Debye_length(T, ni, Zbar):
+    ne = Zbar*ni
+    EF = Fermi_Energy(ne)
+    T_effective = (T**1.8 + (2/3*EF)**1.8)**(1/1.8)
+    λD = 1/np.sqrt(  4*π*ne/T_effective ) # Including degeneracy
+    # λD = 1/np.sqrt(  4*π*ne/T_effective + 4*π*Zbar**2*ni/T  )  # Including ions
+    return λD
+
+def Kappa(T, ni, Zbar):
+    rs = rs_from_n(ni)
+    λD = Debye_length(T, ni, Zbar)
+    return rs/λD
+
+def n_from_rs( rs):
+    """
+    Sphere radius to density, in any units
+    """
+    return 1/(4/3*π*rs**3)
+
+def rs_from_n(n):
+    """
+    Density to sphere radius, in any units.
+    """
+    return (4/3*π*n)**(-1/3)
+
+def find_η(Te, ne):
+    """
+    Gets chemical potential in [AU] that gives density ne at temperature Te
+    """
+    f_to_min = lambda η: ThomasFermi.n_TF(Te, η)-ne # η = βμ in ideal gas, no potential case
+    
+    root_and_info = root(f_to_min, 0.4,tol=1e-4)
+
+    η = root_and_info['x'][0]
+    return η
+
+def P_Ideal_Fermi_Gas(Te, ne):
+    """
+    Gets the noninteracting pressure in AU.
+    """
+    η = find_η(Te, ne)
+    Ithreehalf = FermiDirac.Ithreehalf(η)
+    Θ = Degeneracy_Parameter(Te, ne)
+    P = Te * ne * Θ**(3/2) * Ithreehalf # Goes to 2/5 EF ne
+    return P
+
+def E_Ideal_Fermi_Gas(Te, ne):
+    """
+    Gets the noninteracting pressure in AU.
+    """
+    η = find_η(Te, ne)
+    Ithreehalf = FermiDirac.Ithreehalf(η)
+    Θ = Degeneracy_Parameter(Te, ne)
+    E = 3/2 * Te * Θ**(3/2) * Ithreehalf # Goes to 3/5 EF
+    return E
 
 def More_TF_Zbar( Z, n_AU, T_AU):
         """

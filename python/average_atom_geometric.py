@@ -8,16 +8,15 @@ from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import gmres, LinearOperator, eigs, spsolve
 from scipy.linalg import solve_banded
 from scipy.optimize import root, newton_krylov, fsolve
-from atomic_forces.average_atom.python.linear_response import response
+# from atomic_forces.average_atom.python.linear_response import response
 
 # import sys
 # sys.path.append('/home/zach/plasma/hnc/')
 from hnc.hnc.hnc import Integral_Equation_Solver as IET
-from hnc.hnc.misc import Fermi_Energy, n_from_rs, Debye_length
 
 from .grids import NonUniformGrid
 from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve
-from .physics import FermiDirac, ThomasFermi, χ_Lindhard, χ_TF, More_TF_Zbar
+from .physics import FermiDirac, ThomasFermi, χ_Lindhard, χ_TF, More_TF_Zbar, Fermi_Energy, n_from_rs, Debye_length
 
 import matplotlib.pyplot as plt
 from matplotlib import colors
