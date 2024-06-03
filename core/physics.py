@@ -10,10 +10,6 @@ import matplotlib.pyplot as plt
 
 from hnc.hnc.constants import *
 
-eV=0.0367512
-π = np.pi
-
-
 
 def Fermi_Energy(ne):
     E_F = 1/(2*m_e) * (3*π**2 * ne)**(2/3)

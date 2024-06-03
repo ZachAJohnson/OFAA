@@ -8,11 +8,12 @@ from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import gmres, LinearOperator, eigs, spsolve
 from scipy.linalg import solve_banded
 from scipy.optimize import root, newton_krylov, fsolve
-# from atomic_forces.average_atom.python.linear_response import response
 
-# import sys
-# sys.path.append('/home/zach/plasma/hnc/')
+import os
+from .config import CORE_DIR, PACKAGE_DIR
+
 from hnc.hnc.hnc import Integral_Equation_Solver as IET
+from hnc.hnc.constants import *
 
 from .grids import NonUniformGrid
 from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve
@@ -24,10 +25,6 @@ from matplotlib import colors
 import json
 
 import pandas as pd
-
-eV = 0.0367512 # So 4 eV = 4 * 0.036.. in natural units
-Kelvin = 8.61732814974493e-5*eV #Similarly, 1 Kelvin = 3.16... in natural units 
-π = np.pi
 
 # def load_NPA( fname, TFW=True, ignore_vxc=False):
 # 	#e.g. fname="/home/zach/plasma/atomic_forces/average_atom/data/NPA_Aluminum_TFD_R9.0e+00_rs3.0e+00_T3.7e-02eV_Zstar3.0.dat"
@@ -198,7 +195,7 @@ class NeutralPseudoAtom(Atom):
 		aBohr = 5.29177210903e-9 # cm
 		print("\n_____________________________________\nPlasma Description in A.U. and metric")
 		print("n_ion: {0:10.3e} [A.U.], {1:10.3e} [1/cc]".format(self.ni_bar, self.ni_bar/aBohr**3))
-		print("T:     {0:10.3e} [A.U.], {1:10.3e} [eV]".format(self.Te, self.Te/eV ))
+		print("T:     {0:10.3e} [A.U.], {1:10.3e} [eV]".format(self.Te, self.Te*AU_to_eV ))
 		print("\n")
 
 
@@ -209,8 +206,8 @@ class NeutralPseudoAtom(Atom):
 		  '\t r[AU]  \t n[AU]  \t nf[AU]  \t nb[AU]     n_ion[AU]    (φ_e+φ_ions)[AU]   φtotal[AU]     δVxc/δρ[Au]  ') 
 		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe, self.φe + self.φion, self.vxc_f(self.ne)] ).T
 		
-		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te/eV, self.Zstar)
-		self.savefile = "/home/zach/plasma/atomic_forces/average_atom/data/" + txt
+		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
+		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 		
 	def set_physical_params(self):
@@ -249,7 +246,7 @@ class NeutralPseudoAtom(Atom):
 		# self.φion = self.Z/self.grid.xs - self.Z/self.grid.xs[self.rws_index] #1/r with zero at boundary 
 		self.φe_init = self.Z/self.grid.xs*np.exp(-self.kTF*self.grid.xs) - self.φion
 		# self.φe_init = self.grid.ones.copy() #-self.φion #self.grid.zeros.copy()
-		self.φe = self.φe_init
+		self.φe = self.φe_init.copy()
 		
 
 		# Initializing densities 
@@ -270,26 +267,23 @@ class NeutralPseudoAtom(Atom):
 		"""
 		
 		# Use approximate density based on plasma electron density, ignoring unknown W correction
-		eta_approx = 1/self.Te*(self.μ + self.φe + self.φion)
-		
-		self.ne_init = self.fast_n_TF( eta_approx ) #self.Z/self.WSvol*self.grid.ones
-		
-		Ne_core_init = self.grid.integrate_f(self.ne_init)
+		# if self.R == self.rs:
+		self.ne = self.ne_bar * np.ones_like(self.grid.xs)
+		self.set_μ()
+		# eta_approx = 1/self.Te*(self.μ + self.φe + self.φion)
+		eta_approx = self.μ/self.Te - self.get_βVeff(self.φe, self.ne, self.ne_bar)
 
-		# Add constant density so that exactly neutral in correlation sphere of radius R
-		# Qneeded = Ne_core_init - self.Qion
-		# ne_rest = -Qneeded/self.Vol
-		# self.ne_init += ne_rest
+		self.ne_init = self.fast_n_TF( eta_approx ) #self.Z/self.WSvol*self.grid.ones
+	
+		# Ne_core_init = self.grid.integrate_f(self.ne_init)
 
 		# Multiply density so that exactly neutral in correlation sphere of radius R
-		self.ne_init *= self.Qion/Ne_core_init
+		# self.ne_init *= self.Qion/Ne_core_init
 
-		short_distance_weight = np.exp(-0.5*self.kTF*self.grid.xs)
-
-		if self.R > self.rs:
-			self.ne_init += self.ρi[-1] - self.ne_init[-1] 
-		
-		self.ne = self.ne_init # Update actual density
+		# else:
+		# self.ne_init += self.ρi[-1] - self.ne_init[-1] 
+			
+		self.ne = self.ne_init.copy() # Update actual density
 		self.n_b, self.n_f = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
 
 	def get_βVeff(self, φe, ne, ne_bar):
@@ -367,7 +361,7 @@ class NeutralPseudoAtom(Atom):
 	
 
 	## Chemical Potential Methods 
-	def set_μ_TF(self):
+	def set_μ(self):
 		"""
 		Finds μ through enforcing charge neutrality
 		"""
@@ -390,14 +384,6 @@ class NeutralPseudoAtom(Atom):
 		
 		self.μ +=  alpha1 * self.Te*Qnet/np.sqrt(self.grid.integrate_f(nprime)**2 + 0.1)
 		
-		
-	def shift_μ(self):
-		"""
-		Set φ = φion + φe to be zero at boundary (arbitrary as long as mu is adjusted).
-		"""
-		shift = - self.φe[-1]  # Shift amount
-		self.φe = self.φe + shift # Adjust φe
-		self.μ  = self.μ  - shift # Adjust μ, compensating shift so overall energy same
 		
 	## IONS
 	def make_iet(self):
@@ -507,6 +493,8 @@ class NeutralPseudoAtom(Atom):
 			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
 			A[0,1] = -1/dx[0]
 			A[-1,-1] = 1 # Sets φe[-1]=0
+			# A[-1,-1] = 1#/dx[-1] # Sets grad φe[-1]=0
+			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
 			
 			
 			b = np.zeros(self.grid.Nx)
@@ -528,15 +516,7 @@ class NeutralPseudoAtom(Atom):
 		
 		return φe, rel_errs
 
-	def get_φe_integrated(self, ρ):
-		Q = np.array([self.grid.integrate_f(ρ, end_index = index) for  index in np.arange(self.grid.Nx)])
-		
-		φe_at_R = 0
-		# Q/self.grid.xs 
-		φe = φe_at_R + np.array([self.grid.integrate_f(Q/self.grid.xs**2, begin_index = index) for index in np.arange(self.grid.Nx) ])
-
-		return φe, np.zeros_like(φe)
-
+	
 	def get_φe(self, ρ):
 		# if self.rs==self.R:
 		return self.get_φe_tridiag(ρ)
@@ -546,15 +526,16 @@ class NeutralPseudoAtom(Atom):
 	def update_φe(self, l_decay = None):
 		if l_decay is None:
 				l_decay = 1/(0.25*self.kTF)
-		short_distance_weight = np.exp(-self.grid.xs/l_decay)
-
+		
 		φe_guess, rel_errs = self.get_φe(self.ρi - self.ne)
 
+		short_distance_weight = np.exp(-self.grid.xs/l_decay)
+		short_distance_weight = 10**(-5*self.grid.xs/self.R)
 		self.φe = (1-short_distance_weight)*self.φe + short_distance_weight*φe_guess
 
 		return np.mean(rel_errs)
 
-	def update_ne_W(self, alpha, constant_hλ=False):
+	def get_ne_W(self, constant_hλ=False):
 
 		def banded_Ab():
 			d2dx2 = self.grid.matrix_d2fdx2()
@@ -618,17 +599,26 @@ class NeutralPseudoAtom(Atom):
 		γs = tridiagsolve(A, b)
 		self.γs = γs
 
-		self.new_ne = γs**2/self.grid.xs**2
-		self.new_ne = self.new_ne * self.Z/self.grid.integrate_f(self.new_ne) # normalize so it is reasonable
+		new_ne = γs**2/self.grid.xs**2
+		new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
 
-		self.ne = self.small_update(self.new_ne, self.ne, alpha=alpha)
+		return new_ne
 
-	def update_ne(self, alpha, **kwargs):
+	def get_new_ne(self, **kwargs):
+		if self.gradient_correction is not None:
+			new_ne = self.get_new_ne_W(**kwargs)
+		else:
+			new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+
+	def update_ne(self, alpha, num_10folds_per_rs, **kwargs):
 		if self.gradient_correction is not None:
 			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
-			self.update_ne_W(alpha )
+			ne_guess = self.get_ne_W(alpha )
 		else:
-			self.ne = self.small_update(self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar), self.ne, alpha, **kwargs)
+			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+
+		short_distance_picard = alpha  * 10**(-num_10folds_per_rs*self.grid.xs/self.rs)
+		self.ne = (1-short_distance_picard)*self.ne + short_distance_picard*ne_guess
 
 	def small_update(self, f_new, f_old, alpha, type = 'exp', l_decay = None):
 		delta = f_new - f_old	
@@ -726,6 +716,12 @@ class NeutralPseudoAtom(Atom):
 		self.make_ρi()
 		return Zstar_needed_for_neutral
 
+	def rel_error(self, vec_1, vec_2, weight=1, abs=False):
+		if abs==False:
+			return np.linalg.norm( weight*(vec_1 - vec_2)  )/np.linalg.norm( weight*np.sqrt(vec_1**2 + vec_2**2) )
+		else:
+			return np.linalg.norm( weight*np.abs(vec_1 - vec_2)  )/np.linalg.norm( weight*np.sqrt(vec_1**2 + vec_2**2) )
+
 	def L2_change(self,new,old):	
 		"""
 		Weighted error metric for difference between new, old of multiple parameters.
@@ -738,7 +734,8 @@ class NeutralPseudoAtom(Atom):
 		return coeffs @ rel_err(new,old)
 	
 
-	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, remove_ion = False, save_steps=False):
+
+	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, remove_ion = False, save_steps=False, n_wait_update_Zstar = 100, num_10folds_per_rs=1 ):
 		"""
 		Solve TF OFDFT equation, assuming a given Zbar for the plasma ions 
 		"""
@@ -749,26 +746,24 @@ class NeutralPseudoAtom(Atom):
 			self.φion = 0*self.grid.xs
 			self.Qion = self.grid.integrate_f( self.ρi )
 
-		self.ne_list = []
-		self.ρi_list = []
-		self.ne_bar_list = []
-		self.μ_list, self.rho_err_list, self.change_list = [], [], []
-		self.φe_list = []
-		self.μ_list  = []
-
-
+		self.ne_list = [self.ne.copy()]
+		self.ρi_list = [self.ρi.copy()]
+		self.ne_bar_list = [self.ne_bar]
+		self.μ_list, self.rho_err_list, self.change_list = [self.μ], [0], [0]
+		self.φe_list = [self.φe]
+		
 		Q = 0
 		n = 0
 		new_Zstar = 0
-		lengthscale_to_change_over = 1/(0.25*self.kTF) #self.grid.xs[np.where( np.abs(ne/ne_TF-1) >1e-8)][0])
 		converged, μ_converged, Zbar_converged = False, False, False
 		while not converged and n < int(nmax):
 			Q_old = Q
 			old = self.μ, np.mean(self.ne), np.mean(self.φe) 
 			
 			# Update physics in this order
-			poisson_err = self.update_φe(l_decay = 1000*lengthscale_to_change_over)
-			self.update_ne(picard_alpha, l_decay = lengthscale_to_change_over)
+			self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
+			poisson_err = np.mean(poisson_err)
+			self.update_ne(picard_alpha, num_10folds_per_rs)
 
 			if remove_ion: #Simulating removal of ion, keep μ the same.
 				pass
@@ -780,11 +775,11 @@ class NeutralPseudoAtom(Atom):
 						new_Zstar = self.update_bound_free()
 
 					if n%10==0 or n<5 and not μ_converged:
-						self.set_μ_TF()
+						self.set_μ()
 					elif not μ_converged: 
 						self.update_μ_newton(alpha1=1e-3)
 				else:
-					if μ_converged==True and n>100 and not Zbar_converged:
+					if μ_converged==True and n>n_wait_update_Zstar and not Zbar_converged:
 						old_ne_bar = self.ne_bar
 						cutoff_index = -1 # self.rws_index
 						if self.fixed_Zstar == False:
@@ -798,9 +793,7 @@ class NeutralPseudoAtom(Atom):
 
 			
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
-			rho_err = np.linalg.norm(4*π*self.grid.xs**2*np.abs(TF_ne-self.ne))/np.linalg.norm(4*π*self.grid.xs**2*TF_ne)
-			lengthscale_to_change_over = np.max([ self.grid.xs[np.where( np.abs(self.ne/TF_ne-1) > 1e-8)][0] , 1/(0.25*self.kTF) ])
-			# lengthscale_to_change_over = 0.1*np.sum(self.grid.xs*np.abs(self.ne/TF_ne-1))/np.sum(np.abs(self.ne/TF_ne-1))
+			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
 
 			# Save convergence variables
 			Q = self.get_Q()
@@ -814,7 +807,6 @@ class NeutralPseudoAtom(Atom):
 			self.ρi_list.append(self.ρi.copy())
 			self.ne_bar_list.append(self.ne_bar)
 
-
 			if np.abs(1-self.μ/old[0])<1e-2:
 				μ_converged = True
 
@@ -822,11 +814,11 @@ class NeutralPseudoAtom(Atom):
 				print("__________________________________________")
 				print("TF Iteration {0}".format(n))
 				print("	mu = {0:10.4f}, change: {1:10.4e} (converged={2})".format(self.μ, np.abs(1-self.μ/old[0]),μ_converged))	
-				print("	Poisson Err = {0:10.3e}, rho Err = {1:10.3e}".format(poisson_err, rho_err))
+				print("	φe Err = {0:10.3e}, φe change = {1:10.3e}".format(poisson_err, self.rel_error(self.φe_list[-1], self.φe_list[-2])  ))
+				print("	ne Err = {0:10.3e}, ne change = {1:10.3e}".format(rho_err, self.rel_error(self.ne_list[-1], self.ne_list[-2])  ))
 				print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
 				print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(new_Zstar, self.Zstar, Zbar_converged))
 				print("	Change = {0:10.3e}".format(change))
-				print("	L_decay = {0:10.3e}".format(lengthscale_to_change_over))
 
 			# Converged ?
 			if remove_ion:
@@ -838,13 +830,13 @@ class NeutralPseudoAtom(Atom):
 			n+=1
 
 		print("__________________________________________")
-		print("Final {0} Iteration: {1}".format(self.aa_type, n))
+		print("TF Iteration {0}".format(n))
 		print("	mu = {0:10.4f}, change: {1:10.4e} (converged={2})".format(self.μ, np.abs(1-self.μ/old[0]),μ_converged))	
-		print("	Poisson Err = {0:10.3e}, rho Err = {1:10.3e}".format(poisson_err, rho_err))
+		print("	φe Err = {0:10.3e}, φe change = {1:10.3e}".format(poisson_err, self.rel_error(self.φe_list[-1], self.φe_list[-2])  ))
+		print("	ne Err = {0:10.3e}, ne change = {1:10.3e}".format(rho_err, self.rel_error(self.ne_list[-1], self.ne_list[-2])  ))
 		print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
 		print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(new_Zstar, self.Zstar, Zbar_converged))
 		print("	Change = {0:10.3e}".format(change))
-		print("	L_decay = {0:10.3e}".format(lengthscale_to_change_over))
 		return converged
 
 	def	update_Zstar(self, new_Zstar):
@@ -861,67 +853,7 @@ class NeutralPseudoAtom(Atom):
 
 		self.Zstar = (self.min_Zstar + self.max_Zstar)/2
 
-	def solve_NPA(self, verbose=True, tol=1e-4, Zstar_range = None ):
-		print("Starting NPA Loop with Z*={0:.2f}".format(self.Zstar))
-		enforced_minZstar, enforced_maxZstar = 0.01, self.Z
-		converged = False
-		n, nmax = 0, int(1e3	)
-		self.μNPA_list, self.Zstar_list, self.Zstar_estimate_list = [], [], []
-		
-		if Zstar_range==None:
-			self.min_Zstar, self.max_Zstar = enforced_minZstar, self.Z
-		else:
-			self.min_Zstar, self.max_Zstar = Zstar_range
-
-		while not converged and n < nmax:
-			TF_code = self.solve_TF(verbose=False, tol=tol) #Using Zstar, computes
-			
-			Zstar_old, Q_old = self.Zstar, self.get_Q()
-
-			# φ_shift = -self.vxc_f(self.ne)[-1] # Can escape potential at R
-			# φ_shift =  self.φe[self.rws_index] + self.φion[self.rws_index] -self.vxc_f(self.ne)[self.rws_index] # Can escape rs
-			φ_shift = np.max(self.φe[self.rws_index:] + self.φion[self.rws_index:] -self.vxc_f(self.ne)[self.rws_index:])# Can escape anything past rs
-			
-			new_Zstar = self.update_bound_free(φ_shift = φ_shift ) #Updates n_b, n_f, Zstar
-			self.update_Zstar(new_Zstar)
-
-
-			self.make_ρi() #Updates ion density, automatically plugged into Poisson Eqn.
-			# delta_Q = self.get_Q() - Q_old
-			self.compensate_ρe() #Adds constant electron density so as to compensate change in Q
-			self.set_μ_TF()
-
-			self.μNPA_list.append(self.μ)
-			self.Zstar_list.append(self.Zstar)
-			self.Zstar_estimate_list.append(new_Zstar)
-
-			if verbose==True:
-				print("__________________________________________")
-				print("__________________________________________")
-				print("NPA Iteration {0}".format(n))
-				print("	Estimated new Z* = {0:0.3f}".format(new_Zstar))
-				print("	Z* ε ({0:.3f},{1:.3f})".format(self.min_Zstar, self.max_Zstar))
-				print("	Z*: {0:.3f} -> {1:.3f}".format(Zstar_old, self.Zstar))
-
-			boundaries_within_tol = np.abs(1-self.min_Zstar/self.max_Zstar)<1e-2
-			estimate_within_tol = abs(self.Zstar - new_Zstar) < 0.005 #abs(1-self.Zstar/new_Zstar) < 1e-3
-			boundaries_super_close = np.abs(1-self.min_Zstar/self.max_Zstar)<1e-5
-
-			if estimate_within_tol and boundaries_within_tol:
-			# if boundaries_within_tol:
-				print("NPA Converged!")
-				self.convergence_plot([self.Zstar_list, self.Zstar_estimate_list], ['Z*', 'Z*(Estimated)'])
-				self.save_data()
-				converged = True
-			elif boundaries_super_close and not estimate_within_tol:
-				print("Boundaries converged, but estimate did not. Increasing boundaries.") 
-				# self.min_Zstar = np.max([self.min_Zstar - 0.1, 0.1])
-				# self.max_Zstar = np.min([self.max_Zstar + 0.1, 13 ])
-				self.min_Zstar = np.max([np.min([self.min_Zstar , new_Zstar]), enforced_minZstar])
-				self.max_Zstar = np.min([np.max([self.max_Zstar , new_Zstar ]),enforced_maxZstar])
-
-			n+=1
-
+	
 	
 	def run_empty_TF(self, **kwargs):
 		# Save current info and run empty-ion shell 
@@ -948,114 +880,6 @@ class NeutralPseudoAtom(Atom):
 
 	
 
-	def run_HNC(self, potential='linear', alpha=0.1):
-		"""
-		runs hnc including Yukawa bridge function
-		"""
-		# print("HNC CURRENTLY USING YUKAWA NOT LINEAR RESPONSE")
-		# potential_dict = {'linear':self.make_lin_response_vii(), 'Yuk':None , 'GK':  self.make_GK_vii(), 'ONR': 'do_loop'}
-
-		
-		self.set_physical_params()
-
-		N_species = 1
-		Gamma = np.array(  [[self.Γ]])
-
-		names = ["Al" ] 
-		kappa = self.κ
-		rho = np.array([  3/(4*np.pi) ])
-		self.hnc= HNC_solver(N_species, Gamma=Gamma, kappa=kappa, tol=1e-4,
-		                 kappa_multiscale=3, rho = rho, num_iterations=int(1e4), 
-		                 R_max=10, N_bins=1000, names=names)
-
-		if potential=='linear': 
-			βu_function = self.make_lin_response_vii()
-			Bridge = self.hnc.Bridge_function_Yukawa( self.hnc.r_array, self.Γ, self.κ ) 
-			self.hnc.βu_r_matrix[0,0] = βu_function(self.hnc.r_array) - Bridge
-
-			self.hnc.split_βu_matrix()
-			self.hnc.get_βu_k_matrices()
-
-		self.hnc.HNC_solve(alpha=alpha)
-
-
-		gii = interp1d(self.hnc.r_array, self.hnc.h_r_matrix[0,0] + 1 ,fill_value=(0,1),bounds_error=False)(self.grid.xs/self.rs)
-		return gii
-
-
-	def run_HNC_ONR(self, potential='Yuk'):
-		"""
-		runs hnc
-		Based on 
-		"""
-		# print("HNC CURRENTLY USING YUKAWA NOT LINEAR RESPONSE")
-		potential_dict = {'linear':self.make_lin_response_vii(), 'Yuk':None , 'GK':  self.make_GK_vii()}
-
-
-		self.set_physical_params()
-		self.hnc = HNC( Gamma = self.Γ, kappa = self.κ, N_bins=1000, tol=1e-4, R_max = self.R/self.rs, 
-							num_iterations=10000, potential_func = potential_dict[potential])
-		self.hnc.HNC_solve()
-
-
-	def solve_HNC_NPA(self, verbose=True, tol=1e-3, Zstar_range = None, alpha=0.5, initialize=True):
-		print("Beginning HNC NPA Loop with Z*={0:.2f}".format(self.Zstar))
-
-		n, nmax = 0, int(1e3	)
-		converged=False
-		# INITIALIZE STUFF
-		if initialize:
-			self.solve_TF()
-			self.update_bound_free()
-			self.gii = self.run_HNC(potential='Yuk')
-			# self.gii = self.hnc.g_func(self.grid.xs/self.rs)
-			self.make_ρi()
-
-		
-		# NOW CONVERGE
-		while not converged and n < nmax:
-			# old_gofr = self.hnc.g_r
-			old_Zstar = self.Zstar
-			if n==0:
-				old_vii = 1
-			else:
-				old_vii = self.lin.vii
-			#Solve NPA
-			self.solve_NPA(verbose=verbose, Zstar_range = Zstar_range )
-			#Solve HNC
-			new_gii = self.run_HNC(potential='linear')
-			
-			#Plots
-			gr_files = ["/home/zach/plasma/atomic_forces/data/RDF/Al_0.5eV_rs3_KS-MD.txt", "/home/zach/plasma/atomic_forces/data/RDF/Al_0.5eV_rs3_TFY-MD.txt"]
-			gr_labels= ["KS MD", "TFY MD"]
-			self.hnc.plot_g_all_species(data_to_compare=gr_files, data_names=gr_labels)
-			self.hnc.plot_βu_all_species()
-			# self.hnc.plot_hnc( data_to_compare=gr_files, data_names=gr_labels)
-			# self.hnc.plot_potential()
-			self.make_charge_plot()
-			self.make_plots()
-			self.make_plot_bound_free()
-
-			
-			err_g = np.linalg.norm(new_gii - self.gii)/np.sqrt(self.grid.Nx)
-			err_Zstar = np.abs(old_Zstar - self.Zstar)
-
-			# Picard update gii using HNC
-			# new_gii  = self.hnc.g_func(self.grid.xs/self.rs)
-			self.gii = alpha*new_gii + (1-alpha)*self.gii 
-			self.make_ρi()
-
-			# err_vii = np.linalg.norm(1-(old_vii/self.lin.vii)[:-1])
-			print("HNC Current Errors: ")
-			print("	g(r) err: {0:.3e}".format(err_g))
-			print("	Z* err: {0:.3e}".format(err_Zstar))
-			print(" Z* = {0:.3e}".format(self.Zstar))
-			# print("	v_ii err: {0:.3e}".format(err_vii))
-
-			if err_g<tol and err_Zstar < 0.02:# and err_vii<tol:	
-				converged=True
-
-
 	##############################	
 	########## PLOTTING ##########
 	##############################
@@ -1063,9 +887,9 @@ class NeutralPseudoAtom(Atom):
 		text = ("{0}, {1}\n".format(self.name, self.aa_type.replace("_", " "))+ 
 			r"$r_s$ = " + "{0:.2f},    ".format(self.rs,2) +
 			r"$R_{NPA}$ = " + "{0:.2f}\n".format(self.R)  +
-    			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te/eV) +
-    			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ/eV) +
-    			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])/eV) +
+    			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te*AU_to_eV) +
+    			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ*AU_to_eV) +
+    			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])*AU_to_eV) +
     			r"$Z^\ast =$ " + "{0:.2f}".format(self.Zstar)  )
 		self.nice_text = text
 		
@@ -1087,7 +911,7 @@ class NeutralPseudoAtom(Atom):
 
 		#Save
 		name = "NPA_convergence.png"
-		plt.savefig("/home/zach/plasma/atomic_forces/average_atom/media/" + name, dpi=300, bbox_inches='tight',facecolor="w")
+		plt.savefig(os.path.join(PACKAGE_DIR,"media",name), dpi=300, bbox_inches='tight',facecolor="w")
 		#plt.show()
 		return fig, ax
 
@@ -1101,8 +925,10 @@ class NeutralPseudoAtom(Atom):
 		axs[0].plot(self.grid.xs , -self.φe, label=r"$-\phi_{e}$")
 		axs[0].plot(self.grid.xs , self.φe + self.φion, label=r"$\phi$")
 		if not self.ignore_vxc:
-			axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-\delta V_{xc}/\delta n_e$")
-			axs[0].plot(self.grid.xs , self.φe + self.φion - self.vxc_f(self.ne) , label=r"$\phi -	 \delta V_{xc}/\delta n_e$")
+			axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
+		if self.gradient_correction is not None:
+			axs[0].plot(self.grid.xs , -self.get_gradient_energy(self.ne) , label=r"$-v_{W}[n_e]$")
+		axs[0].plot(self.grid.xs , -self.get_βVeff(self.φe, self.ne, self.ne_bar)*self.Te , label=r"$-V_{\rm eff}$")
 
 
 		axs[0].set_ylabel(r'$\phi$ [A.U.]',fontsize=20)
@@ -1137,17 +963,17 @@ class NeutralPseudoAtom(Atom):
 			text = ("{0}, {1}\n".format(self.name, self.aa_type.replace("_", " "))+ 
 				r"$r_s$ = " + "{0:.2f},    ".format(self.rs,2) +
 				r"$R_{NPA}$ = " + "{0:.2f}\n".format(self.R)  +
-        			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te/eV) +
-        			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ/eV) +
-        			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])/eV) +
+        			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te*AU_to_eV) +
+        			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ*AU_to_eV) +
+        			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])*AU_to_eV) +
         			r"$Z^\ast =$ " + "{0:.2f}".format(self.Zstar)  )
 			self.nice_text = text
 			props = dict(boxstyle='round', facecolor='w')
 			ax.text(0.05,0.95, text, fontsize=15, transform=ax.transAxes, verticalalignment='top', bbox=props)
 
 		plt.tight_layout()
-		name = "NPA_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.Te/eV,2) ,np.round(self.R))
-		plt.savefig("/home/zach/plasma/atomic_forces/average_atom/media/" + name, dpi=300, bbox_inches='tight',facecolor="w")
+		name = "NPA_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.Te*AU_to_eV,2) ,np.round(self.R))
+		plt.savefig(os.path.join(PACKAGE_DIR,'media',name), dpi=300, bbox_inches='tight',facecolor="w")
 		if show == True:
 			plt.show()
 		return fig, axs
@@ -1193,15 +1019,15 @@ class NeutralPseudoAtom(Atom):
 			text = ("{0}\n".format(self.name)+ 
 				r"$r_s$ = " + "{0},    ".format(np.round(self.rs,2)) +
 				r"$R_{NPA}$ = " + "{0}\n".format(self.R)  +
-        			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T/eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
+        			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
         			r"$Z^\ast = $" + "{0}".format(np.round(self.Zstar,2))  )
 
 			props = dict(boxstyle='round', facecolor='w')
 			ax.text(0.05,0.95, text, fontsize=15, transform=ax.transAxes, verticalalignment='top', bbox=props)
 
 		plt.tight_layout()
-		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T/eV,2) ,np.round(self.R))
-		plt.savefig("/home/zach/plasma/atomic_forces/average_atom/media/" + name, dpi=300, bbox_inches='tight',facecolor="w")
+		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T*AU_to_eV,2) ,np.round(self.R))
+		plt.savefig(os.path.join(PACKAGE_DIR,'media',name), dpi=300, bbox_inches='tight',facecolor="w")
 		if show == True:
 			plt.show()
 		return fig, axs
@@ -1236,15 +1062,15 @@ class NeutralPseudoAtom(Atom):
 		text = ("{0}\n".format(self.name)+ 
 			r"$r_s$ = " + "{0},    ".format(np.round(self.rs,2)) +
 			r"$R_{NPA}$ = " + "{0}\n".format(self.R)  +
-  			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T/eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
+  			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
   			r"$Z^\ast = $" + "{0}".format(np.round(self.Zstar,2))  )
 
 		props = dict(boxstyle='round', facecolor='w')
 		axs[0].text(0.05,0.95, text, fontsize=15, transform=axs[0].transAxes, verticalalignment='top', bbox=props)
 
 		plt.tight_layout()
-		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T/eV,2) ,np.round(self.R))
-		plt.savefig("/home/zach/plasma/atomic_forces/average_atom/media/" + name, dpi=300, bbox_inches='tight',facecolor="w")
+		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T*AU_to_eV,2) ,np.round(self.R))
+		plt.savefig(os.path.join(PACKAGE_DIR,'media',name), dpi=300, bbox_inches='tight',facecolor="w")
 		if show == True:
 			plt.show()
 		return fig, axs
@@ -1254,7 +1080,7 @@ if __name__=='__main__':
 	# atom = NeutralPseudoAtom(13, 28, 1050*Kelvin,  3.1268 , 10, Npoints=1000,name='Aluminum', TFW=False, ignore_vxc=True)
 	atom = NeutralPseudoAtom(13, 28, 1*eV,  3 , 30, Npoints=3000, Zstar_init=3.8, name='Aluminum', TFW=False, ignore_vxc=False)
 
-	# folder= "/home/zach/plasma/atomic_forces/average_atom/data/"
+	# folder= "os.path.join(PACKAGE_DIR, 'data')"
 	# fname = "Aluminum_NPA_TFD_R9.0e+00_rs3.0e+00_T3.7e-02eV_Zstar3.8.dat"
 	# atom  = load_NPA(folder + fname,TFW=False, ignore_vxc=False)
 	#atom.solve_TF(verbose=True)
