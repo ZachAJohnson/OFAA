@@ -1019,14 +1019,14 @@ class NeutralPseudoAtom(Atom):
 			text = ("{0}\n".format(self.name)+ 
 				r"$r_s$ = " + "{0},    ".format(np.round(self.rs,2)) +
 				r"$R_{NPA}$ = " + "{0}\n".format(self.R)  +
-        			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
+        			r"$Te$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.Te,2),np.round(self.Te*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
         			r"$Z^\ast = $" + "{0}".format(np.round(self.Zstar,2))  )
 
 			props = dict(boxstyle='round', facecolor='w')
 			ax.text(0.05,0.95, text, fontsize=15, transform=ax.transAxes, verticalalignment='top', bbox=props)
 
 		plt.tight_layout()
-		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T*AU_to_eV,2) ,np.round(self.R))
+		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.Te*AU_to_eV,2) ,np.round(self.R))
 		plt.savefig(os.path.join(PACKAGE_DIR,'media',name), dpi=300, bbox_inches='tight',facecolor="w")
 		if show == True:
 			plt.show()
@@ -1062,14 +1062,14 @@ class NeutralPseudoAtom(Atom):
 		text = ("{0}\n".format(self.name)+ 
 			r"$r_s$ = " + "{0},    ".format(np.round(self.rs,2)) +
 			r"$R_{NPA}$ = " + "{0}\n".format(self.R)  +
-  			r"$T$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.T,2),np.round(self.T*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
+  			r"$Te$ = " + "{0} [A.U.] = {1} eV\n".format(np.round(self.Te,2),np.round(self.Te*AU_to_eV,2)) + r"$\mu$ = " + "{0} [A.U.]\n".format(np.round(self.μ,2)) +
   			r"$Z^\ast = $" + "{0}".format(np.round(self.Zstar,2))  )
 
 		props = dict(boxstyle='round', facecolor='w')
 		axs[0].text(0.05,0.95, text, fontsize=15, transform=axs[0].transAxes, verticalalignment='top', bbox=props)
 
 		plt.tight_layout()
-		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.T*AU_to_eV,2) ,np.round(self.R))
+		name = "NPA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(self.name, np.round(self.rs,2), np.round(self.Te*AU_to_eV,2) ,np.round(self.R))
 		plt.savefig(os.path.join(PACKAGE_DIR,'media',name), dpi=300, bbox_inches='tight',facecolor="w")
 		if show == True:
 			plt.show()
