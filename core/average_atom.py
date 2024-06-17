@@ -115,7 +115,9 @@ class NeutralPseudoAtom(Atom):
 		if ignore_vxc == False:
 			self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
 			self.vxc_f = np.vectorize(self.vxc_f)
-
+		else:
+			self.vxc_f = lambda rho: 0
+			self.vxc_f = np.vectorize(self.vxc_f)
 		self.μ_init = μ_init
 		
 		if Zstar_init =='More':
@@ -221,6 +223,7 @@ class NeutralPseudoAtom(Atom):
 		self.kTF = 1/self.λTF
 
 		self.κ   = self.λTF*self.rs
+		self.φ_κ_screen = self.κ
 		self.Γ   = self.Zstar**2/(self.rs*self.Ti)
 		self.make_χee()
 
@@ -452,7 +455,9 @@ class NeutralPseudoAtom(Atom):
 	def solve_iet(self, **kwargs):
 		print("	-------------------")
 		print("	Solving IET.")
-		self.iet.HNC_solve(iters_to_wait=1e5, tol=1e-12, verbose=False,num_iterations=1e4)
+		my_kwargs = {'iters_to_wait':1e5, 'tol':1e-12, 'verbose':False,'num_iterations':1e4}
+		my_kwargs.update(kwargs)
+		self.iet.HNC_solve(**my_kwargs)
 
 	def make_gii(self, **kwargs):
 		"""
@@ -475,7 +480,7 @@ class NeutralPseudoAtom(Atom):
 		# print("Qion = {}".format(self.Qion))
 
 
-	def get_φe_tridiag(self, ρ):
+	def get_φe(self, ρ):
 		"""
 		Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
 		Returns:
@@ -516,12 +521,52 @@ class NeutralPseudoAtom(Atom):
 		
 		return φe, rel_errs
 
-	
-	def get_φe(self, ρ):
-		# if self.rs==self.R:
-		return self.get_φe_tridiag(ρ)
-		# else:
-			# return self.get_φe_integrated(ρ)
+	def get_φe_screened(self, ρ):
+		"""
+		Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
+		Screened version based on G. P. Kerker "Efficient iteration scheme for self-consistent pseudopotential calculations"	
+		https://doi.org/10.1103/PhysRevB.23.3082
+		
+		(-Δ + κ^2) φ = + 4πρ  + κ^2 φ
+		Returns:
+			float err: residual Ax-b 
+		"""
+		
+		def explicit_Ab(): #With BC at core and edge
+			#### A ####
+			### FIRST BULK VALUES ###
+			A = -self.grid.matrix_laplacian()
+			inner_diag_indices = ( np.arange(1, self.grid.Nx-1 ), np.arange(1, self.grid.Nx-1 ) )
+			A[inner_diag_indices] += self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
+
+			dx= self.grid.dx
+			x = self.grid.xs
+			### BOUNDARIES ###
+			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
+			A[0,1] = -1/dx[0]
+			A[-1,-1] = 1 # Sets φe[-1]=0
+			# A[-1,-1] = 1#/dx[-1] # Sets grad φe[-1]=0
+			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
+			
+			
+			b = np.zeros(self.grid.Nx)
+			b[0]    = 8*np.pi/9*ρ[0]*x[0]
+			b[-1]  =  0#(+self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
+			b[1:-1]= 4*π*ρ[1:-1] + self.φe[1:-1] * self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
+
+			return A, b
+
+		# Use function to create A, b
+		A, b = explicit_Ab()
+		self.Ab = A, b
+
+		φe = tridiagsolve(A, b)
+		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
+
+		φe = φe - φe[-1]
+		rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
+		
+		return φe, rel_errs
 
 	def update_φe(self, l_decay = None):
 		if l_decay is None:
@@ -761,7 +806,7 @@ class NeutralPseudoAtom(Atom):
 			old = self.μ, np.mean(self.ne), np.mean(self.φe) 
 			
 			# Update physics in this order
-			self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
+			self.φe, poisson_err = self.get_φe_screened(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
 			self.update_ne(picard_alpha, num_10folds_per_rs)
 
@@ -770,7 +815,6 @@ class NeutralPseudoAtom(Atom):
 			else:
 				if self.rs==self.R:
 					# get Zstar from bound/free
-					cutoff_index = -1 # self.rws_index
 					if self.fixed_Zstar == False:
 						new_Zstar = self.update_bound_free()
 
@@ -779,9 +823,8 @@ class NeutralPseudoAtom(Atom):
 					elif not μ_converged: 
 						self.update_μ_newton(alpha1=1e-3)
 				else:
-					if μ_converged==True and n>n_wait_update_Zstar and not Zbar_converged:
+					if μ_converged==True and Zbar_converged==False and n>n_wait_update_Zstar :
 						old_ne_bar = self.ne_bar
-						cutoff_index = -1 # self.rws_index
 						if self.fixed_Zstar == False:
 							new_Zstar = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							if np.abs(new_Zstar/self.Zstar - 1)<1e-5:
@@ -789,8 +832,19 @@ class NeutralPseudoAtom(Atom):
 							self.ne += self.ne_bar - old_ne_bar
 					if self.fixed_Zstar == False:
 						self.update_ρi_and_Zstar_to_make_neutral() 
-					self.initialize_μ()
 
+					if μ_converged == False and n<500:
+						self.initialize_μ()
+					else:
+						self.set_μ()
+					if n%10==0:
+						old_ne_bar = self.ne_bar
+						new_Zstar = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
+						self.ne += self.ne_bar - old_ne_bar
+
+					# self.initialize_μ()
+					
+					
 			
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
@@ -807,7 +861,7 @@ class NeutralPseudoAtom(Atom):
 			self.ρi_list.append(self.ρi.copy())
 			self.ne_bar_list.append(self.ne_bar)
 
-			if np.abs(1-self.μ/old[0])<1e-2:
+			if np.abs(1-self.μ/old[0])<1e-3:
 				μ_converged = True
 
 			if verbose and (n%25==0 or n<10):
