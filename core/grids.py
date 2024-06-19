@@ -29,9 +29,9 @@ class LinearGrid(OneDGrid):
 		self.bulk_indcs = slice(1,-1)
 		self.grid_shape = self.Nx
 
-	def integrate_f(self, f, end_index= -1):
-		#return np.sum(4*π*f*self.xs**2)*self.dx
-		return simps((f*self.vols)[:end_index], x = self.xs[:end_index])
+	def integrate_f(self, f, end_index= None):
+		integration_region = slice(None, end_index)
+		return simps((f*self.vols)[integration_region], x = self.xs[integration_region])
 
 	def dfdx(self, f):
 		"""
@@ -64,25 +64,27 @@ class LinearGrid(OneDGrid):
 		return ffull
 
 class NonUniformGrid(OneDGrid):
-	def __init__(self,   xmin, xmax, Nx, rs):
+	def __init__(self,   xmin, xmax, Nx, rs, spacing='geometric'):
 		self.rs = rs
+		self.spacing = spacing
 		super().__init__(xmin, xmax, Nx)
 	
 
 	def make_grid(self, frac_geometric = 0.25):
-		N_geom  = self.Nx#int(frac_geometric*self.Nx) #int(frac_geometric*self.Nx)
-		# N_lin  = self.Nx-N_geom#int( self.Nx/4)
-		
-		# xs1 = np.linspace (self.rs/3, self.xmax, num = N_lin , endpoint=False) # difficult region around rs
-		
-		# x_exp  = np.geomspace(self.xmin, self.xmax, num = N_geom, endpoint=True)
-		ε_sqrt = np.linspace(np.sqrt(self.xmin), np.sqrt(self.xmax), num=N_geom, endpoint=True )
-		dε = ε_sqrt[1]-ε_sqrt[0]
-		cell_boundary_points = np.linspace(np.sqrt(self.xmin) - dε/2 , np.sqrt(self.xmax)+dε/2, num = N_geom+1, endpoint=True )**2
+		if self.spacing=='square':
+			ε_sqrt = np.linspace(np.sqrt(self.xmin), np.sqrt(self.xmax), num=self.Nx, endpoint=True )
+			self.xs = ε_sqrt**2
+			dε = ε_sqrt[1]-ε_sqrt[0]
+			cell_boundary_points = np.linspace(np.sqrt(self.xmin) - dε/2 , np.sqrt(self.xmax)+dε/2, num = self.Nx+1, endpoint=True )**2
+			
+		elif self.spacing=='geometric':
+			ε_geom = np.linspace(np.log(self.xmin), np.log(self.xmax), num=self.Nx, endpoint=True)
+			self.xs = np.exp(ε_geom)
+			dε = ε_geom[1] - ε_geom[0]
+			cell_boundary_points = np.exp(np.linspace(np.log(self.xmin)-dε/2, np.log(self.xmax)+dε/2, num=self.Nx+1, endpoint=True))
 
-		self.xs = ε_sqrt**2
+		
 		self.cells = cell_boundary_points
-
 		self.vols = 4/3*π*(self.cells[1:]**3 - self.cells[:-1]**3)
 		self.dx = self.xs[1:]-self.xs[:-1]
 		self.bulk_indcs = slice(1,-1)
