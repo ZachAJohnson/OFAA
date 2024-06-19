@@ -17,7 +17,7 @@ from .config import CORE_DIR, PACKAGE_DIR
 from hnc.hnc.hnc import Integral_Equation_Solver as IET
 from hnc.hnc.constants import *
 
-from .grids import NonUniformGrid
+from .grids import FourierGrid
 from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve
 from .physics import FermiDirac, ThomasFermi, χ_Lindhard, χ_TF, More_TF_Zbar, Fermi_Energy, n_from_rs, Debye_length
 
@@ -134,7 +134,7 @@ class NeutralPseudoAtom(Atom):
 
 		# Instantiate 1-D grid and ThomasFermi
 		print("	Intializing grid")
-		self.grid = NonUniformGrid(rmin, R, Npoints, self.rs, spacing=grid_spacing)
+		self.grid = FourierGrid(rmin, R, Npoints)
 		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
 		self.make_fast_n_TF()
 
@@ -166,40 +166,6 @@ class NeutralPseudoAtom(Atom):
 		Ionehalf = interp1d(etas, I12_values, kind='linear', bounds_error=False, fill_value=(0, None))
 		self.fast_n_TF = lambda eta: (np.sqrt(2)/np.pi**2)*self.Te**(3/2)*Ionehalf(eta)
 		# self.fast_n_TF = np.vectorize(fast_n_TF)
-
-
-	def interp_to_grid(self, r_data, f_data):
-		logr_data = np.log(r_data)
-		logf_data = np.where(f_data==0, -1e1, np.log(f_data) )
-		f = interp1d(logr_data, logf_data, bounds_error=False, fill_value = (logf_data[0], logf_data[-1]) )
-		new_logf_data = f(np.log(self.grid.xs))
-		return np.exp(new_logf_data) 
-
-
-	def new_grid(self, Npoints, xmin = None):
-		old_xs = self.grid.xs
-		if xmin==None:
-			xmin = self.grid.xmin
-
-		self.grid = NonUniformGrid(xmin, self.R, Npoints, self.rs)
-		self.φe = self.interp_to_grid(old_xs, self.φe)
-		self.φion = self.Z/self.grid.xs - self.Z/self.R#self.grid.xmax #1/r with zero at boundary 
-		self.ne = self.interp_to_grid(old_xs, self.ne)
-		self.n_b = self.interp_to_grid(old_xs, self.n_b)
-		self.n_f = self.interp_to_grid(old_xs, self.n_f)
-		self.gii = self.interp_to_grid(old_xs, self.gii)
-		self.ni = self.interp_to_grid(old_xs, self.ni)
-		self.ρi = self.interp_to_grid(old_xs, self.ρi)
-		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
-
-
-	def print_metric_units(self):
-		aBohr = 5.29177210903e-9 # cm
-		print("\n_____________________________________\nPlasma Description in A.U. and metric")
-		print("n_ion: {0:10.3e} [A.U.], {1:10.3e} [1/cc]".format(self.ni_bar, self.ni_bar/aBohr**3))
-		print("T:     {0:10.3e} [A.U.], {1:10.3e} [eV]".format(self.Te, self.Te*AU_to_eV ))
-		print("\n")
-
 
 	### Saving data
 	def save_data(self):
@@ -277,7 +243,7 @@ class NeutralPseudoAtom(Atom):
 			self.ne_init = self.ne_init_core
 			self.ne = self.ne_init.copy() # Update actual density
 		else:
-			transition_func = np.exp(-0.5*(self.grid.xs/self.rs)**1)
+			transition_func = np.exp(-0.5*(self.grid.xs/(0.5*self.rs))**2)
 			self.ne_init_outer = (1-transition_func)*self.ρi*np.ones_like(self.grid.xs)
 			netQ_outer = self.grid.integrate_f(self.ρi - self.ne_init_outer)
 			remaining_Q = self.Z + netQ_outer 
@@ -373,7 +339,6 @@ class NeutralPseudoAtom(Atom):
 			μ_guess = self.μ
 		root_and_info = root(min_μ, μ_guess, tol=1e-12)
 		μ = root_and_info['x'][0]
-		print(f"μ={μ}")
 		return μ
 
 	def set_μ_neutral(self):
@@ -493,122 +458,45 @@ class NeutralPseudoAtom(Atom):
 		self.Qion = self.Z  + self.grid.integrate_f( self.ρi )
 		# print("Qion = {}".format(self.Qion))
 
+		
 	def get_φe(self, ρ):
-		"""
-		Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
-		Returns:
-			float err: residual Ax-b 
-		"""
-		
-		def explicit_Ab(): #With BC at core and edge
-			#### A ####
-			### FIRST BULK VALUES ###
-			A = -self.grid.matrix_laplacian()
-			
-			dx= self.grid.dx
-			x = self.grid.xs
-			### BOUNDARIES ###
-			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
-			A[0,1] = -1/dx[0]
-			A[-1,-1] = 1 # Sets φe[-1]=0
-			# A[-1,-1] = 1#/dx[-1] # Sets grad φe[-1]=0
-			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
-			
-			
-			b = np.zeros(self.grid.Nx)
-			b[0]    = 8*np.pi/9*ρ[0]*x[0]
-			b[-1]  =  0#(+self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
-			b[1:-1]= 4*π*ρ[1:-1]
-
-			return A, b
-
-		# Use function to create A, b
-		A, b = explicit_Ab()
-		self.Ab = A, b
-
-		φe = tridiagsolve(A, b)
-		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
-
-		# φe = φe - φe[-1]
-		rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
-		
-		return φe, rel_errs
-
-	def get_φe_screened(self, ρ):
-		"""
-		Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
-		Screened version based on G. P. Kerker "Efficient iteration scheme for self-consistent pseudopotential calculations"	
-		https://doi.org/10.1103/PhysRevB.23.3082
-		
-		(-Δ + κ^2) φ = + 4πρ  + κ^2 φ
-		Returns:
-			float err: residual Ax-b 
-		"""
-		
-		def explicit_Ab(): #With BC at core and edge
-			#### A ####
-			### FIRST BULK VALUES ###
-			A = -self.grid.matrix_laplacian()
-			inner_diag_indices = ( np.arange(1, self.grid.Nx-1 ), np.arange(1, self.grid.Nx-1 ) )
-			A[inner_diag_indices] += self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
-
-			dx= self.grid.dx
-			x = self.grid.xs
-			### BOUNDARIES ###
-			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
-			A[0,1] = -1/dx[0]
-			A[-1,-1] = 1 # Sets φe[-1]=0
-
-			# A[-1,-1] = 1/dx[-1] # Sets grad φe[-1]=0
-			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
-			
-			
-			b = np.zeros(self.grid.Nx)
-			b[0]    = 8*np.pi/9*ρ[0]*x[0]
-			b[-1]  =  0#-(self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
-			b[1:-1]= 4*π*ρ[1:-1] + self.φe[1:-1] * self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
-
-			return A, b
-
-		# Use function to create A, b
-		A, b = explicit_Ab()
-		self.Ab = A, b
-
-		φe = tridiagsolve(A, b)
-		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
-
-		# φe = φe - φe[-1]
-		rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
-		
-		return φe, rel_errs
-	
-	def get_φe_iet(self, ρ):
-		# Setting up analytic ρ, φ for exact cancellation with central ion
-		## iet space
-		r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
-		λ=20/rs # rs
-		Q = self.grid.integrate_f(ρ) # -Z
-		self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
-
-		### aa space
-		r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
-		ε = 1e-10 # ε->0
-		Γ = gammaincc(ε, r*λ)*gamma(ε) 
-		self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
-		self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
-
 		# numerical rest of charge
-		self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
-		self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
-		self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
-		self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
-		self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
-
-		self.iet.δφe_r = self.iet.δφe_r
-		δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
-		φe = self.φe0_iet + δφe
+		self.ρ_r = ρ.copy()
+		self.ρ_k = self.grid.FT_r_2_k(self.ρ_r)
+		self.φe_k = 4*π*self.ρ_k/self.grid.ks**2
+		self.φe_r = self.grid.FT_k_2_r(self.φe_k)
+		φe = self.φe_r.copy()
 		φe -= φe[-1]
 		return φe, np.zeros_like(φe)
+
+	
+	# def get_φe(self, ρ):
+	# 	# Setting up analytic ρ, φ for exact cancellation with central ion
+	# 	## iet space
+	# 	r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
+	# 	λ=20/rs # rs
+	# 	Q = self.grid.integrate_f(ρ) # -Z
+	# 	self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
+
+	# 	### aa space
+	# 	r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
+	# 	ε = 1e-10 # ε->0
+	# 	Γ = gammaincc(ε, r*λ)*gamma(ε) 
+	# 	self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
+	# 	self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
+
+	# 	# numerical rest of charge
+	# 	self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
+	# 	self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
+	# 	self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
+	# 	self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
+	# 	self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
+
+	# 	self.iet.δφe_r = self.iet.δφe_r
+	# 	δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
+	# 	φe = self.φe0_iet + δφe
+	# 	φe -= φe[-1]
+	# 	return φe, np.zeros_like(φe)
 
 	def update_φe(self, l_decay = None):
 		if l_decay is None:
@@ -843,8 +731,7 @@ class NeutralPseudoAtom(Atom):
 			old = self.μ, np.mean(self.ne), np.mean(self.φe) 
 			
 			# Update physics in this order
-			# self.φe, poisson_err = self.get_φe_screened(self.ρi - self.ne)
-			self.φe, poisson_err = self.get_φe_iet(self.ρi - self.ne)
+			self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
 			self.update_ne(picard_alpha)
 
