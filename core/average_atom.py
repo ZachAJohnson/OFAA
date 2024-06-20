@@ -277,7 +277,7 @@ class NeutralPseudoAtom(Atom):
 			self.ne_init = self.ne_init_core
 			self.ne = self.ne_init.copy() # Update actual density
 		else:
-			transition_func = np.exp(-0.5*(self.grid.xs/self.rs)**1)
+			transition_func = np.exp(-0.5*(self.grid.xs/self.rs)**2)
 			self.ne_init_outer = (1-transition_func)*self.ρi*np.ones_like(self.grid.xs)
 			netQ_outer = self.grid.integrate_f(self.ρi - self.ne_init_outer)
 			remaining_Q = self.Z + netQ_outer 
@@ -373,7 +373,6 @@ class NeutralPseudoAtom(Atom):
 			μ_guess = self.μ
 		root_and_info = root(min_μ, μ_guess, tol=1e-12)
 		μ = root_and_info['x'][0]
-		print(f"μ={μ}")
 		return μ
 
 	def set_μ_neutral(self):
@@ -609,13 +608,20 @@ class NeutralPseudoAtom(Atom):
 	# 	φe = self.φe0_iet + δφe
 	# 	φe -= φe[-1]
 	# 	return φe, np.zeros_like(φe)
+
+	# def convert_density_grid_to_ftgrid(self, ρ):
+	# 	f_iet = interp1d(np.log(self.grid.xs), f, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
+
 	def get_φe_iet(self, ρ):
 		# numerical rest of charge
-		self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
+		Q_from_ρ = self.grid.integrate_f(ρ)
+		self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate', kind='cubic')(self.iet.r_array*self.rs)
+		Q_from_iet_ρ = np.sum(4*π*self.iet.r_array**2*self.rs**3*self.iet.del_r*self.iet.ρ_r )
+		self.iet.ρ_r*=Q_from_ρ/Q_from_iet_ρ #Ensures the net charge does not change from crappy interpolation
 		self.iet.ρ_k = self.iet.FT_r_2_k(self.iet.ρ_r)
 		self.iet.φe_k = 4*π*self.iet.ρ_k/(self.iet.k_array/self.rs)**2
 		self.iet.φe_r = self.iet.FT_k_2_r(self.iet.φe_k)
-		φe = interp1d(self.iet.r_array*self.rs, self.iet.φe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
+		φe = interp1d(self.iet.r_array*self.rs, self.iet.φe_r, bounds_error=False, fill_value='extrapolate', kind='cubic')(self.grid.xs)
 		φe -= φe[-1]
 		return φe, np.zeros_like(φe)
 
@@ -882,14 +888,14 @@ class NeutralPseudoAtom(Atom):
 					# self.set_μ_infinite()
 
 					
-					if self.fixed_Zstar == False:
-						if n%10==0:
+					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
+						if change<1e-5:
 							old_ne_bar = self.ne_bar
 							new_Zstar  = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							self.ne   += self.ne_bar - old_ne_bar
 					
-					# self.update_ρi_and_Zstar_to_make_neutral()
-					# self.set_μ_infinite()
+					self.update_ρi_and_Zstar_to_make_neutral()
+					self.set_μ_infinite()
 					self.set_μ_neutral()
 
 					

@@ -111,15 +111,9 @@ class NeutralPseudoAtom(Atom):
 		self.WSvol = 4/3*π*self.rs**3
 		self.Vol   = 4/3*π*self.R**3
 		self.gii_init_type = gii_init_type 
+
 		# Whether to include xc, mainly because libxc is an absolute pain
 		self.TF = ThomasFermi(self.Te, ignore_vxc = ignore_vxc )
-		self.ignore_vxc = ignore_vxc
-		if ignore_vxc == False:
-			self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
-			self.vxc_f = np.vectorize(self.vxc_f)
-		else:
-			self.vxc_f = lambda rho: 0
-			self.vxc_f = np.vectorize(self.vxc_f)
 		self.μ_init = μ_init
 		
 		if Zstar_init =='More':
@@ -138,6 +132,10 @@ class NeutralPseudoAtom(Atom):
 		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
 		self.make_fast_n_TF()
 
+		# sparse grid for vxc and vectorize
+		self.ignore_vxc = ignore_vxc
+		self.make_vxc_funcs()
+		
 		# Gradient Corrections
 		self.gradient_correction = gradient_correction
 		if gradient_correction is not None:
@@ -158,6 +156,23 @@ class NeutralPseudoAtom(Atom):
 		if gradient_correction is not None:
 			self.aa_type += gradient_correction
 
+	def get_vxc(self, ne):
+		sparse_ne = np.e**interp1d(np.log(self.grid.xs), np.log(ne), kind='cubic', bounds_error=False, fill_value='extrapolate')(np.log(self.sparse_xs))
+		vxc_sparse = self.vxc_f(sparse_ne)
+
+		vxc = interp1d(self.sparse_xs, vxc_sparse, kind='linear', bounds_error=False, fill_value='extrapolate')(self.grid.xs)
+		return vxc
+	
+
+	def make_vxc_funcs(self):
+		self.sparse_xs = np.geomspace(np.min(self.grid.xs), np.max(self.grid.xs), num = 200)
+		
+		if self.ignore_vxc == False:
+			self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
+			self.vxc_f = np.vectorize(self.vxc_f)
+		else:
+			self.vxc_f = lambda rho: 0
+			self.vxc_f = np.vectorize(self.vxc_f)
 
 	def make_fast_n_TF(self):
 		# IMPLEMENT: check if file exists, if not create it	
@@ -172,7 +187,7 @@ class NeutralPseudoAtom(Atom):
 		header = ("# All units in [AU] if not specified\n"+
           '{{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.3e}, "T[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs) + 
 		  '\t r[AU]  \t n[AU]  \t nf[AU]  \t nb[AU]     n_ion[AU]    (φ_e+φ_ions)[AU]   φtotal[AU]     δVxc/δρ[Au]  ') 
-		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe, self.φe + self.φion, self.vxc_f(self.ne)] ).T
+		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe, self.φe + self.φion, self.get_vxc(self.ne)] ).T
 		
 		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
@@ -232,7 +247,7 @@ class NeutralPseudoAtom(Atom):
 		# Use approximate density based on plasma electron density, ignoring unknown W correction
 		self.ne = self.ne_bar * np.ones_like(self.grid.xs)
 		# if self.rs == self.R:
-		self.set_μ_neutral()
+		self.set_μ_infinite()
 		# else:
 		# 	self.set_μ_infinite()
 
@@ -251,7 +266,7 @@ class NeutralPseudoAtom(Atom):
 			self.ne_init_core *= remaining_Q/self.grid.integrate_f(self.ne_init_core)
 			self.ne_init = self.ne_init_core + self.ne_init_outer
 			self.ne = self.ne_init.copy() # Update actual density
-			self.set_μ_neutral()
+			self.set_μ_infinite()
 
 		
 		self.n_b, self.n_f = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
@@ -260,11 +275,11 @@ class NeutralPseudoAtom(Atom):
 		if self.ignore_vxc and self.gradient_correction is None:
 			βVeff = ( -φe - self.φion )/self.Te
 		elif self.ignore_vxc==False and self.gradient_correction is None:
-			βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
+			βVeff = ( -φe - self.φion + self.get_vxc(ne) - self.vxc_f(ne_bar) )/self.Te
 		elif self.ignore_vxc and self.gradient_correction is not None:
 			βVeff = ( -φe - self.φion + self.get_gradient_energy(ne))/self.Te
 		elif self.ignore_vxc==False and self.gradient_correction is not None:
-			βVeff = ( -φe - self.φion + self.get_gradient_energy(ne) + self.vxc_f(ne) - self.vxc_f(ne_bar))/self.Te
+			βVeff = ( -φe - self.φion + self.get_gradient_energy(ne) + self.get_vxc(ne) - self.vxc_f(ne_bar))/self.Te
 
 		return βVeff
 
@@ -316,15 +331,16 @@ class NeutralPseudoAtom(Atom):
 		Defined coefficients by
 		δF_K/δρ = a/ρ nabla^2 (ρ) + b/ρ^2 |nabla(ρ)|^2 
 		"""
-		grad_n = self.grid.dfdx(ne)
-		laplace_ne = 1/self.grid.xs**2 * self.grid.dfdx(self.grid.xs**2 * grad_n)
+		ne_k = self.grid.FT_r_2_k(ne)
+		grad_n_square = self.grid.FT_k_2_r(self.grid.ks*ne_k)
+		laplace_ne = -self.grid.FT_k_2_r(self.grid.ks**2*ne_k)
 
 		if self.gradient_correction=='K':
 			eta = self.TF.η_interp(ne)
 			aW, bW = self.get_grad_coeffs(eta, ne, self.T)
 		elif self.gradient_correction=='W':
 			aW, bW = self.get_grad_coeffs()
-		return aW/ne * laplace_ne + bW/ne**2 * grad_n**2
+		return aW/ne * laplace_ne + bW/ne**2 * grad_n_square
 	
 
 	## Chemical Potential Methods 
@@ -387,11 +403,11 @@ class NeutralPseudoAtom(Atom):
 			nf = self.n_f.copy() #+ self.ni_bar
 			nf = np.where(nf<=1e-30, 1e-30, nf)
 
-		etas = self.TF.η_interp(nf) # η = β( μ + self.φe + self.φion - self.vxc_f(ne)  )         
+		etas = self.TF.η_interp(nf) # η = β( μ + self.φe + self.φion - self.get_vxc(ne)  )         
 		if self.ignore_vxc:
 			totφ_pseudo = etas*self.Te - self.μ # total potential that must be acting on nf
 		else:
-			totφ_pseudo = etas*self.Te + self.vxc_f(nf) - self.vxc_f(self.ne_bar)  - self.μ # total potential that must be acting on nf
+			totφ_pseudo = etas*self.Te + self.get_vxc(nf) - self.vxc_f(self.ne_bar)  - self.μ # total potential that must be acting on nf
 		φe_from_nf, _ = self.get_φe( (-nf + self.ρi)  ) # potential from nf itself
 
 		φ_pseudo = (totφ_pseudo - φe_from_nf)
@@ -469,6 +485,20 @@ class NeutralPseudoAtom(Atom):
 		φe -= φe[-1]
 		return φe, np.zeros_like(φe)
 
+	def get_φe(self, ρ):
+		# numerical rest of charge
+		κ = 1/self.rs # self.kTF
+		self.ρ_r = ρ.copy()
+		self.ρ_k = self.grid.FT_r_2_k(self.ρ_r)
+		if False:#self.rs != self.R:
+			n_k_screen = κ**2/(4*π) * self.grid.FT_r_2_k(self.φe)
+			self.φe_k = 4*π*(self.ρ_k + n_k_screen)/(self.grid.ks**2 + κ**2)
+		else:
+			self.φe_k = 4*π*self.ρ_k/self.grid.ks**2
+		self.φe_r = self.grid.FT_k_2_r(self.φe_k)
+		φe = self.φe_r.copy()
+		φe -= φe[-1]
+		return φe, np.zeros_like(φe)
 	
 	# def get_φe(self, ρ):
 	# 	# Setting up analytic ρ, φ for exact cancellation with central ion
@@ -498,86 +528,86 @@ class NeutralPseudoAtom(Atom):
 	# 	φe -= φe[-1]
 	# 	return φe, np.zeros_like(φe)
 
-	def update_φe(self, l_decay = None):
-		if l_decay is None:
-				l_decay = 1/(0.25*self.kTF)
+	# def update_φe(self, l_decay = None):
+	# 	if l_decay is None:
+	# 			l_decay = 1/(0.25*self.kTF)
 		
-		φe_guess, rel_errs = self.get_φe(self.ρi - self.ne)
+	# 	φe_guess, rel_errs = self.get_φe(self.ρi - self.ne)
 
-		short_distance_weight = np.exp(-self.grid.xs/l_decay)
-		short_distance_weight = 10**(-5*self.grid.xs/self.R)
-		self.φe = (1-short_distance_weight)*self.φe + short_distance_weight*φe_guess
+	# 	short_distance_weight = np.exp(-self.grid.xs/l_decay)
+	# 	short_distance_weight = 10**(-5*self.grid.xs/self.R)
+	# 	self.φe = (1-short_distance_weight)*self.φe + short_distance_weight*φe_guess
 
-		return np.mean(rel_errs)
+	# 	return np.mean(rel_errs)
 
-	def get_ne_W(self, constant_hλ=False):
+	# def get_ne_W(self, constant_hλ=False):
 
-		def banded_Ab():
-			d2dx2 = self.grid.matrix_d2fdx2()
+	# 	def banded_Ab():
+	# 		d2dx2 = self.grid.matrix_d2fdx2()
 
-			etas = self.TF.η_interp(self.ne)
-			if self.gradient_correction=='K':
-				aW, bW = self.get_grad_coeffs(etas, self.ne, self.Te)
-				print("bW term NOT supported, please switch to 'W' gradient_correction_type for now.")
-			elif self.gradient_correction=='W':
-				aW, bW = self.get_grad_coeffs()
+	# 		etas = self.TF.η_interp(self.ne)
+	# 		if self.gradient_correction=='K':
+	# 			aW, bW = self.get_grad_coeffs(etas, self.ne, self.Te)
+	# 			print("bW term NOT supported, please switch to 'W' gradient_correction_type for now.")
+	# 		elif self.gradient_correction=='W':
+	# 			aW, bW = self.get_grad_coeffs()
 
-			if not self.ignore_vxc:
-				bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion - self.vxc_f(self.ne) + self.vxc_f(self.ne_bar)) )
-			if self.ignore_vxc:
-				bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion ))
+	# 		if not self.ignore_vxc:
+	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion - self.get_vxc(self.ne) + self.vxc_f(self.ne_bar)) )
+	# 		if self.ignore_vxc:
+	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion ))
 					
-			# Split to gaurantee positive solution 
-			γ = np.sqrt(self.ne)*self.grid.xs
-			b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
-			c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
+	# 		# Split to gaurantee positive solution 
+	# 		γ = np.sqrt(self.ne)*self.grid.xs
+	# 		b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
+	# 		c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
 
-			A = -d2dx2 + np.diag(c)
+	# 		A = -d2dx2 + np.diag(c)
 
-			#Boundary
-			dx= self.grid.dx
-			x = self.grid.xs
+	# 		#Boundary
+	# 		dx= self.grid.dx
+	# 		x = self.grid.xs
 			
-			# Interior- Kato cusp condition
-			interior_bc = 'kato'
-			if interior_bc in ['kato','Kato']:
-				# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
-				# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
-				# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
+	# 		# Interior- Kato cusp condition
+	# 		interior_bc = 'kato'
+	# 		if interior_bc in ['kato','Kato']:
+	# 			# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
+	# 			# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
+	# 			# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
 				
-				# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
-				A[0,0] = -x[1]/x[0]
-				A[0,1] = 1
-				b[0]   = 0
+	# 			# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
+	# 			A[0,0] = -x[1]/x[0]
+	# 			A[0,1] = 1
+	# 			b[0]   = 0
 				
 
-			elif interior_bc == 'zero': # Sets γ to zero
-				A[0,0] = 1/self.grid.dx[0]**2
-				b[0] = 0
+	# 		elif interior_bc == 'zero': # Sets γ to zero
+	# 			A[0,0] = 1/self.grid.dx[0]**2
+	# 			b[0] = 0
 
-			# Exterior- γ''= 0 at edge is nice
-			# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
-			# A[-1,-2] = -2/(dx[-1]*dx[-2])           
-			# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
+	# 		# Exterior- γ''= 0 at edge is nice
+	# 		# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
+	# 		# A[-1,-2] = -2/(dx[-1]*dx[-2])           
+	# 		# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
 			
-			# Exterior- dγ=γ/r
-			A[-1,-1] = 1/dx[-1]**2 
-			A[-1,-2] = -1/dx[-1]**2 
+	# 		# Exterior- dγ=γ/r
+	# 		A[-1,-1] = 1/dx[-1]**2 
+	# 		A[-1,-2] = -1/dx[-1]**2 
 
-			b[-1]  = γ[-1]/dx[-1]/x[-1] 
+	# 		b[-1]  = γ[-1]/dx[-1]/x[-1] 
 			
 
-			return A, b		
+	# 		return A, b		
 
-		A, b = banded_Ab()
-		self.Ab_W = A, b
-		γs = tridiagsolve(A, b)
-		self.γs = γs
+	# 	A, b = banded_Ab()
+	# 	self.Ab_W = A, b
+	# 	γs = tridiagsolve(A, b)
+	# 	self.γs = γs
 
-		new_ne = γs**2/self.grid.xs**2
-		new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
+	# 	new_ne = γs**2/self.grid.xs**2
+	# 	new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
 
-		return new_ne
+	# 	return new_ne
 
 	def get_new_ne(self, **kwargs):
 		if self.gradient_correction is not None:
@@ -586,7 +616,7 @@ class NeutralPseudoAtom(Atom):
 			new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 
 	def update_ne(self, alpha, **kwargs):
-		if self.gradient_correction is not None:
+		if False:#self.gradient_correction is not None:
 			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
 			ne_guess = self.get_ne_W(alpha )
 		else:
@@ -760,13 +790,13 @@ class NeutralPseudoAtom(Atom):
 					# self.set_μ_infinite()
 
 					
-					if self.fixed_Zstar == False:
+					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
 						if n%10==0:
 							old_ne_bar = self.ne_bar
 							new_Zstar  = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							self.ne   += self.ne_bar - old_ne_bar
 					
-					# self.update_ρi_and_Zstar_to_make_neutral()
+					self.update_ρi_and_Zstar_to_make_neutral()
 					# self.set_μ_infinite()
 					self.set_μ_neutral()
 
@@ -812,7 +842,7 @@ class NeutralPseudoAtom(Atom):
 
 		print("__________________________________________")
 		print("TF Iteration {0}".format(n))
-		print("	mu = {0:10.4f}, change: {1:10.4e} (converged={2})".format(self.μ, np.abs(1-self.μ/old[0]),μ_converged))	
+		print("	μ = {0:10.9e}, change: {1:10.9e} (converged={2})".format(self.μ, np.abs(1-self.μ/old[0]),μ_converged))	
 		print("	φe Err = {0:10.3e}, φe change = {1:10.3e}".format(poisson_err, self.rel_error(self.φe_list[-1], self.φe_list[-2])  ))
 		print("	ne Err = {0:10.3e}, ne change = {1:10.3e}".format(rho_err, self.rel_error(self.ne_list[-1], self.ne_list[-2])  ))
 		print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
@@ -871,7 +901,7 @@ class NeutralPseudoAtom(Atom):
 			r"$R_{NPA}$ = " + "{0:.2f}\n".format(self.R)  +
     			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te*AU_to_eV) +
     			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ*AU_to_eV) +
-    			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])*AU_to_eV) +
+    			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.get_vxc(self.ne)[-1],(self.μ-self.get_vxc(self.ne)[-1])*AU_to_eV) +
     			r"$Z^\ast =$ " + "{0:.2f}".format(self.Zstar)  )
 		self.nice_text = text
 		
@@ -907,7 +937,7 @@ class NeutralPseudoAtom(Atom):
 		axs[0].plot(self.grid.xs , -self.φe, label=r"$-\phi_{e}$")
 		axs[0].plot(self.grid.xs , self.φe + self.φion, label=r"$\phi$")
 		if not self.ignore_vxc:
-			axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
+			axs[0].plot(self.grid.xs , -self.get_vxc(self.ne) , label=r"$-v_{xc}[n_e]$")
 		if self.gradient_correction is not None:
 			axs[0].plot(self.grid.xs , -self.get_gradient_energy(self.ne) , label=r"$-v_{W}[n_e]$")
 		axs[0].plot(self.grid.xs , -self.get_βVeff(self.φe, self.ne, self.ne_bar)*self.Te , label=r"$-V_{\rm eff}$")
@@ -947,7 +977,7 @@ class NeutralPseudoAtom(Atom):
 				r"$R_{NPA}$ = " + "{0:.2f}\n".format(self.R)  +
         			r"$T_e$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.Te, self.Te*AU_to_eV) +
         			r"$\mu$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ, self.μ*AU_to_eV) +
-        			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.vxc_f(self.ne)[-1],(self.μ-self.vxc_f(self.ne)[-1])*AU_to_eV) +
+        			r"$\mu-V(R)$ = " + "{0:.3f} [A.U.] = {1:.2f} eV\n".format(self.μ-self.get_vxc(self.ne)[-1],(self.μ-self.get_vxc(self.ne)[-1])*AU_to_eV) +
         			r"$Z^\ast =$ " + "{0:.2f}".format(self.Zstar)  )
 			self.nice_text = text
 			props = dict(boxstyle='round', facecolor='w')
