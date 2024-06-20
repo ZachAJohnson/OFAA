@@ -66,7 +66,7 @@ class FourierGrid():
 		self.fact_r_2_k = 2 * np.pi * self.dx
 		self.fact_k_2_r = self.dk / (4. * np.pi**2)
 
-		self.vols = 4*π*self.xs**2
+		self.vols = 4*π*self.xs**2*self.dx
 
 	def FT_r_2_k(self, input_array):
 	    from_dst = self.fact_r_2_k * fftpack.dst(self.xs * input_array, type=self.dst_type)

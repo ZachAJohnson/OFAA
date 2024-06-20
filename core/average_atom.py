@@ -582,31 +582,40 @@ class NeutralPseudoAtom(Atom):
 		
 		return φe, rel_errs
 	
+	# def get_φe_iet(self, ρ):
+	# 	# Setting up analytic ρ, φ for exact cancellation with central ion
+	# 	## iet space
+	# 	r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
+	# 	λ=20/rs # rs
+	# 	Q = self.grid.integrate_f(ρ) # -Z
+	# 	self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
+
+	# 	### aa space
+	# 	r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
+	# 	ε = 1e-10 # ε->0
+	# 	Γ = gammaincc(ε, r*λ)*gamma(ε) 
+	# 	self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
+	# 	self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
+
+	# 	# numerical rest of charge
+	# 	self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
+	# 	self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
+	# 	self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
+	# 	self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
+	# 	self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
+
+	# 	self.iet.δφe_r = self.iet.δφe_r
+	# 	δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
+	# 	φe = self.φe0_iet + δφe
+	# 	φe -= φe[-1]
+	# 	return φe, np.zeros_like(φe)
 	def get_φe_iet(self, ρ):
-		# Setting up analytic ρ, φ for exact cancellation with central ion
-		## iet space
-		r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
-		λ=20/rs # rs
-		Q = self.grid.integrate_f(ρ) # -Z
-		self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
-
-		### aa space
-		r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
-		ε = 1e-10 # ε->0
-		Γ = gammaincc(ε, r*λ)*gamma(ε) 
-		self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
-		self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
-
 		# numerical rest of charge
 		self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
-		self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
-		self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
-		self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
-		self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
-
-		self.iet.δφe_r = self.iet.δφe_r
-		δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
-		φe = self.φe0_iet + δφe
+		self.iet.ρ_k = self.iet.FT_r_2_k(self.iet.ρ_r)
+		self.iet.φe_k = 4*π*self.iet.ρ_k/(self.iet.k_array/self.rs)**2
+		self.iet.φe_r = self.iet.FT_k_2_r(self.iet.φe_k)
+		φe = interp1d(self.iet.r_array*self.rs, self.iet.φe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
 		φe -= φe[-1]
 		return φe, np.zeros_like(φe)
 
