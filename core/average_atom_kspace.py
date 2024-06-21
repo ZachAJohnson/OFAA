@@ -184,10 +184,11 @@ class NeutralPseudoAtom(Atom):
 
 	### Saving data
 	def save_data(self):
-		header = ("# All units in [AU] if not specified\n"+
-          '{{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.3e}, "T[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs) + 
-		  '\t r[AU]  \t n[AU]  \t nf[AU]  \t nb[AU]     n_ion[AU]    (φ_e+φ_ions)[AU]   φtotal[AU]     δVxc/δρ[Au]  ') 
-		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe, self.φe + self.φion, self.get_vxc(self.ne)] ).T
+		header = ("# All units in Hartree [AU] if not specified\n"+
+          '{{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs)) 
+		column_names = f"   {'r[AU]':15} {'n[AU]':15} {'nf[AU]':15} {'nb[AU]':15} {'n_ion[AU]':15} {'φtot[AU]':15} {'δVxc/δρ[Au]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
+		header += column_names
+		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe + self.φion, self.get_vxc(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
 		
 		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
@@ -451,6 +452,7 @@ class NeutralPseudoAtom(Atom):
 		my_kwargs = {'iters_to_wait':1e5, 'tol':1e-12, 'verbose':False,'num_iterations':1e4}
 		my_kwargs.update(kwargs)
 		self.iet.HNC_solve(**my_kwargs)
+		self.gii_from_iet = interp1d(self.iet.r_array*self.rs, self.iet.h_r_matrix[0,0] + 1, bounds_error=False, fill_value='extrapolate', kind='cubic')(self.grid.xs)
 
 	def make_gii(self, **kwargs):
 		"""
@@ -460,8 +462,7 @@ class NeutralPseudoAtom(Atom):
 			self.gii = np.zeros_like(self.grid.xs)
 		elif self.gii_init_type == 'iet':
 			self.solve_iet(**kwargs)	
-			gii_iet = self.iet.h_r_matrix[0,0] + 1
-			self.gii = interp1d(self.iet.r_array*self.rs, gii_iet, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
+			self.gii = self.gii_from_iet.copy()
 		else: #self.gii_init_type == 'step'
 			self.gii = np.ones_like(self.grid.xs) * np.heaviside(self.grid.xs - self.rs, 1)
 
@@ -678,18 +679,28 @@ class NeutralPseudoAtom(Atom):
 
 		"""
 		self.make_bound_free(φ_shift)
-		
-		# self.compensate_ρe()
-		new_Zstar = self.Z - self.grid.integrate_f(self.n_b)
 
-		self.Zstar = self.Zstar + alpha*(new_Zstar-self.Zstar) #smaller nonzero update
+		self.new_Zstar_guess = self.Z - self.grid.integrate_f(self.n_b)
+
+		try:
+			ΔZ_new = (self.new_Zstar_guess - self.Zstar)
+			ΔZ_old = (self.old_Zstar_guess - self.old_Zstar)
+			dZguess_dZ = (ΔZ_new - ΔZ_old)/(self.Zstar - self.old_Zstar)
+			self.old_Zstar = self.Zstar
+			self.Zstar = self.Zstar - ΔZ_new/dZguess_dZ
+		except AttributeError:	
+			self.old_Zstar = self.Zstar
+			self.Zstar = self.Zstar + alpha*(self.new_Zstar_guess-self.Zstar) #smaller nonzero update
+		
+		self.old_Zstar_guess = self.new_Zstar_guess
+
 		if self.Zstar<=0.01:
 			self.Zstar = 0.01
+
 
 		#Update ne_bar, free density etc.
 		self.set_physical_params() 
 		self.make_ρi()
-		return new_Zstar
 
 	def compensate_ρe(self):#, delta_Q):
 		"""
@@ -754,7 +765,6 @@ class NeutralPseudoAtom(Atom):
 		
 		Q = 0
 		n = 0
-		new_Zstar = 0
 		converged, μ_converged, Zbar_converged = False, False, False
 		while not converged and n < int(nmax):
 			Q_old = Q
@@ -764,14 +774,14 @@ class NeutralPseudoAtom(Atom):
 			self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
 			self.update_ne(picard_alpha)
-
+			self.new_Zstar_guess = self.Zstar
 			if remove_ion: #Simulating removal of ion, keep μ the same.
 				pass
 			else:
 				if self.rs==self.R:
 					# get Zstar from bound/free
 					if self.fixed_Zstar == False:
-						new_Zstar = self.update_bound_free()
+						self.update_bound_free()
 
 					if n%10==0 or n<5 and not μ_converged:
 						self.set_μ_neutral()
@@ -793,7 +803,7 @@ class NeutralPseudoAtom(Atom):
 					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
 						if n%10==0:
 							old_ne_bar = self.ne_bar
-							new_Zstar  = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
+							self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							self.ne   += self.ne_bar - old_ne_bar
 					
 					self.update_ρi_and_Zstar_to_make_neutral()
@@ -802,7 +812,6 @@ class NeutralPseudoAtom(Atom):
 
 					
 					
-			
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
 
@@ -828,7 +837,7 @@ class NeutralPseudoAtom(Atom):
 				print("	φe Err = {0:10.3e}, φe change = {1:10.3e}".format(poisson_err, self.rel_error(self.φe_list[-1], self.φe_list[-2])  ))
 				print("	ne Err = {0:10.3e}, ne change = {1:10.3e}".format(rho_err, self.rel_error(self.ne_list[-1], self.ne_list[-2])  ))
 				print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
-				print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(new_Zstar, self.Zstar, Zbar_converged))
+				print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(self.new_Zstar_guess, self.Zstar, Zbar_converged))
 				print("	Change = {0:10.3e}".format(change))
 
 			# Converged ?
@@ -846,7 +855,7 @@ class NeutralPseudoAtom(Atom):
 		print("	φe Err = {0:10.3e}, φe change = {1:10.3e}".format(poisson_err, self.rel_error(self.φe_list[-1], self.φe_list[-2])  ))
 		print("	ne Err = {0:10.3e}, ne change = {1:10.3e}".format(rho_err, self.rel_error(self.ne_list[-1], self.ne_list[-2])  ))
 		print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
-		print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(new_Zstar, self.Zstar, Zbar_converged))
+		print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(self.new_Zstar_guess, self.Zstar, Zbar_converged))
 		print("	Change = {0:10.3e}".format(change))
 		return converged
 
