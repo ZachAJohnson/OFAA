@@ -184,13 +184,17 @@ class NeutralPseudoAtom(Atom):
 
 	### Saving data
 	def save_data(self):
-		header = ("# All units in Hartree [AU] if not specified\n"+
-          '{{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs)) 
+		err_info = f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
+		aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs)
 		column_names = f"   {'r[AU]':15} {'n[AU]':15} {'nf[AU]':15} {'nb[AU]':15} {'n_ion[AU]':15} {'φtot[AU]':15} {'δVxc/δρ[Au]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
-		header += column_names
+		header = ("# All units in Hartree [AU] if not specified\n"+
+			    err_info + aa_info + column_names)   
 		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe + self.φion, self.get_vxc(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
 		
-		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
+		if self.Te==self.Ti:
+			txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
+		else:
+			txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_Zstar{6:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV,self.Ti*AU_to_eV, self.Zstar)
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 		
@@ -500,115 +504,6 @@ class NeutralPseudoAtom(Atom):
 		φe = self.φe_r.copy()
 		φe -= φe[-1]
 		return φe, np.zeros_like(φe)
-	
-	# def get_φe(self, ρ):
-	# 	# Setting up analytic ρ, φ for exact cancellation with central ion
-	# 	## iet space
-	# 	r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
-	# 	λ=20/rs # rs
-	# 	Q = self.grid.integrate_f(ρ) # -Z
-	# 	self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
-
-	# 	### aa space
-	# 	r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
-	# 	ε = 1e-10 # ε->0
-	# 	Γ = gammaincc(ε, r*λ)*gamma(ε) 
-	# 	self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
-	# 	self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
-
-	# 	# numerical rest of charge
-	# 	self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
-	# 	self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
-	# 	self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
-	# 	self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
-	# 	self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
-
-	# 	self.iet.δφe_r = self.iet.δφe_r
-	# 	δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
-	# 	φe = self.φe0_iet + δφe
-	# 	φe -= φe[-1]
-	# 	return φe, np.zeros_like(φe)
-
-	# def update_φe(self, l_decay = None):
-	# 	if l_decay is None:
-	# 			l_decay = 1/(0.25*self.kTF)
-		
-	# 	φe_guess, rel_errs = self.get_φe(self.ρi - self.ne)
-
-	# 	short_distance_weight = np.exp(-self.grid.xs/l_decay)
-	# 	short_distance_weight = 10**(-5*self.grid.xs/self.R)
-	# 	self.φe = (1-short_distance_weight)*self.φe + short_distance_weight*φe_guess
-
-	# 	return np.mean(rel_errs)
-
-	# def get_ne_W(self, constant_hλ=False):
-
-	# 	def banded_Ab():
-	# 		d2dx2 = self.grid.matrix_d2fdx2()
-
-	# 		etas = self.TF.η_interp(self.ne)
-	# 		if self.gradient_correction=='K':
-	# 			aW, bW = self.get_grad_coeffs(etas, self.ne, self.Te)
-	# 			print("bW term NOT supported, please switch to 'W' gradient_correction_type for now.")
-	# 		elif self.gradient_correction=='W':
-	# 			aW, bW = self.get_grad_coeffs()
-
-	# 		if not self.ignore_vxc:
-	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion - self.get_vxc(self.ne) + self.vxc_f(self.ne_bar)) )
-	# 		if self.ignore_vxc:
-	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion ))
-					
-	# 		# Split to gaurantee positive solution 
-	# 		γ = np.sqrt(self.ne)*self.grid.xs
-	# 		b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
-	# 		c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
-
-	# 		A = -d2dx2 + np.diag(c)
-
-	# 		#Boundary
-	# 		dx= self.grid.dx
-	# 		x = self.grid.xs
-			
-	# 		# Interior- Kato cusp condition
-	# 		interior_bc = 'kato'
-	# 		if interior_bc in ['kato','Kato']:
-	# 			# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
-	# 			# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
-	# 			# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
-				
-	# 			# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
-	# 			A[0,0] = -x[1]/x[0]
-	# 			A[0,1] = 1
-	# 			b[0]   = 0
-				
-
-	# 		elif interior_bc == 'zero': # Sets γ to zero
-	# 			A[0,0] = 1/self.grid.dx[0]**2
-	# 			b[0] = 0
-
-	# 		# Exterior- γ''= 0 at edge is nice
-	# 		# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
-	# 		# A[-1,-2] = -2/(dx[-1]*dx[-2])           
-	# 		# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
-			
-	# 		# Exterior- dγ=γ/r
-	# 		A[-1,-1] = 1/dx[-1]**2 
-	# 		A[-1,-2] = -1/dx[-1]**2 
-
-	# 		b[-1]  = γ[-1]/dx[-1]/x[-1] 
-			
-
-	# 		return A, b		
-
-	# 	A, b = banded_Ab()
-	# 	self.Ab_W = A, b
-	# 	γs = tridiagsolve(A, b)
-	# 	self.γs = γs
-
-	# 	new_ne = γs**2/self.grid.xs**2
-	# 	new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
-
-	# 	return new_ne
 
 	def get_new_ne(self, **kwargs):
 		if self.gradient_correction is not None:
@@ -624,42 +519,6 @@ class NeutralPseudoAtom(Atom):
 			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 
 		self.ne = (1-alpha)*self.ne + alpha*ne_guess
-
-	def small_update(self, f_new, f_old, alpha, type = 'exp', l_decay = None):
-		delta = f_new - f_old	
-
-		small_steps = np.array([alpha*delta , 0.1*np.sign(delta)*f_old])
-
-		#Update relative to size of current rho
-		if type=='rel':
-			f_return = f_old + small_steps[0]
-
-		#Update absolute 
-		elif type=='abs':
-			f_return = f_old + small_steps[1]
-
-		# Minimum of two
-		elif type=='both':
-			absmin = lambda vec_list: np.array([  vec[ np.argmin(np.abs(vec))] for vec in vec_list])
-
-			smallest_steps = absmin(small_steps.T)
-		
-			f_return = f_old + smallest_steps
-
-		elif type=='exp':
-			absmin = lambda vec_list: np.array([  vec[ np.argmin(np.abs(vec))] for vec in vec_list])
-
-			smallest_steps = absmin(small_steps.T)
-			
-			if l_decay is None:
-				l_decay = 1/(0.25*self.kTF)
-			short_distance_weight = np.exp(-self.grid.xs/l_decay)
-			# short_distance_weight = np.exp(-np.log(10)* 4*self.grid.xs/self.grid.xmax ) 
-
-			f_return = f_old + smallest_steps*short_distance_weight
-
-		self.steps = small_steps[0]
-		return f_return
 
 	def make_bound_free(self, φ_shift):
 		etas = self.TF.η_interp(self.ne)
@@ -687,7 +546,9 @@ class NeutralPseudoAtom(Atom):
 			ΔZ_old = (self.old_Zstar_guess - self.old_Zstar)
 			dZguess_dZ = (ΔZ_new - ΔZ_old)/(self.Zstar - self.old_Zstar)
 			self.old_Zstar = self.Zstar
-			self.Zstar = self.Zstar - ΔZ_new/dZguess_dZ
+			newton_change = -ΔZ_new/dZguess_dZ
+			self.Zstar = self.Zstar + np.sign(newton_change) * np.min([self.Zstar*0.25, np.abs(newton_change)])
+
 		except AttributeError:	
 			self.old_Zstar = self.Zstar
 			self.Zstar = self.Zstar + alpha*(self.new_Zstar_guess-self.Zstar) #smaller nonzero update
@@ -701,23 +562,6 @@ class NeutralPseudoAtom(Atom):
 		#Update ne_bar, free density etc.
 		self.set_physical_params() 
 		self.make_ρi()
-
-	def compensate_ρe(self):#, delta_Q):
-		"""
-		After Zstar updates, Q changes by alot. To get better initial guess for this system,
-		We increase the electron density to remain overall neutrality and get better numerics.
-		"""
-		# delta_ne = self.get_Q()/self.Vol #delta_Q/self.Vol 
-		# self.ne += delta_ne  #Increase by delta_Q overall 
-		# Qe = -(self.get_Q() - self.Qion)
-		# self.ne = self.ne*self.Qion/Qe  #Increase by delta_Q overall 
-
-		# short_distance_weight = np.exp(-0.5*self.kTF*self.grid.xs)
-		# self.ne = self.ne*() 
-
-
-		# self.n_f = self.n_f*self.Qion/Qe  #Increase by delta_Q overall 
-		# self.n_b = self.n_b*self.Qion/Qe  #Increase by delta_Q overall 
 
 	def update_ρi_and_Zstar_to_make_neutral(self, alpha = 1):
 		Zstar_needed_for_neutral = (self.grid.integrate_f(self.ne)-self.Z)/self.grid.integrate_f(self.ni)
@@ -780,13 +624,13 @@ class NeutralPseudoAtom(Atom):
 			else:
 				if self.rs==self.R:
 					# get Zstar from bound/free
-					if self.fixed_Zstar == False:
+					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
 						self.update_bound_free()
 
-					if n%10==0 or n<5 and not μ_converged:
-						self.set_μ_neutral()
-					elif not μ_converged: 
-						self.update_μ_newton(alpha1=1e-3)
+					# if n%10==0 or n<5 and not μ_converged:
+					# 	self.set_μ_neutral()
+					# elif not μ_converged: 
+					# 	self.update_μ_newton(alpha1=1e-3)
 				else:
 					# if μ_converged==True and Zbar_converged==False and n>n_wait_update_Zstar :
 					# 	old_ne_bar = self.ne_bar
@@ -801,14 +645,18 @@ class NeutralPseudoAtom(Atom):
 
 					
 					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
-						if n%10==0:
+						if n%100==0:
 							old_ne_bar = self.ne_bar
 							self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							self.ne   += self.ne_bar - old_ne_bar
 					
 					self.update_ρi_and_Zstar_to_make_neutral()
-					# self.set_μ_infinite()
+				# self.set_μ_infinite()
+				if n%10==0 or n<5 and not μ_converged:
 					self.set_μ_neutral()
+				elif not μ_converged: 
+					self.update_μ_newton(alpha1=1e-3)
+					# self.set_μ_neutral()
 
 					
 					
@@ -857,6 +705,9 @@ class NeutralPseudoAtom(Atom):
 		print("	Q = {0:10.3e} -> {1:10.3e}, ".format(Q_old, Q))
 		print("	Zstar guess = {0:10.3e}. Current Zstar: {1:10.3e} (converged={2})".format(self.new_Zstar_guess, self.Zstar, Zbar_converged))
 		print("	Change = {0:10.3e}".format(change))
+		self.poisson_err = poisson_err
+		self.rho_err = rho_err
+		self.Q = Q
 		return converged
 
 	def update_Zstar(self, new_Zstar):

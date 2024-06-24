@@ -29,18 +29,21 @@ Ti_AU = Ti_eV*eV_to_AU
 
 ####
 R = 10*rs
-ignore_vxc = False
+ignore_vxc = True
 fixed_Zstar = False
 Zstar_init = 3.5 # 'More'
 
+# Setup AA paramaters
 aa_kwargs = {'initialize':True, 'gradient_correction':None, 'μ_init' : 0.158, 'Zstar_init' : Zstar_init, 'Npoints':1000,
              'name':name, 'ignore_vxc':ignore_vxc, 'fixed_Zstar':fixed_Zstar, 'iet_R_over_rs':R/rs, 'iet_N_bins':5000, 'use_full_ne_for_nf':False,
             'gii_init_type': 'step'}
 
-
+# Setup NPA parameters
 npa_kwargs = aa_kwargs.copy()
 npa_kwargs.update({'Npoints':10000, 'iet_N_bins':10000, 'gii_init_type': 'iet', 'grid_spacing':'linear'})
 
+
+# Start Evaluation
 t00 = time()
 
 t0 = time()
