@@ -36,7 +36,7 @@ case_list = [C1, C2, C3,  Al1, Al2, Al3,  V1, V2, V3,  Au1, Au2, Au3]
 case_list = [Au1, Au2, Au3]
 
 #### Arguments same for all cases
-ignore_vxc = True
+ignore_vxc = False
 fixed_Zstar = False
 
 # Setup AA paramaters
@@ -52,7 +52,7 @@ npa_kwargs.update({'Npoints':10000, 'iet_N_bins':10000, 'gii_init_type': 'iet', 
 # Loop over all cases
 for case in case_list:
 
-      print(f"n===========================================\n===========================================")
+      print(f"\n===========================================\n===========================================")
       print(f"Starting case: {case.name}\n")
       t00 = time()
       name, Z, A, Ti_AU, Te_AU, rs = case.name, case.Z, case.A, case.Ti, case.Te, case.rs
@@ -67,7 +67,7 @@ for case in case_list:
       print(f"Time to setup AA: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
       
       t0 = time()
-      aa.solve_TF(verbose=False, picard_alpha=0.2, nmax = 5000, tol=1e-9, n_wait_update_Zstar= 100)
+      aa.solve_TF(verbose=False, picard_alpha=0.2, nmax = 2, tol=1e-9, n_wait_update_Zstar= 100)
       aa.set_uii_eff()
       print(f"Time to solve AA: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
       
@@ -86,7 +86,7 @@ for case in case_list:
       npa.Zstar = aa.Zstar
 
       t0 = time()
-      npa.solve_TF(verbose=False, picard_alpha=1e-2, tol=1e-9, nmax = 10000, n_wait_update_Zstar= 500)
+      npa.solve_TF(verbose=False, picard_alpha=1e-2, tol=1e-9, nmax = 2, n_wait_update_Zstar= 500)
       npa.set_uii_eff()
       print(f"Time to solve NPA: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
 
