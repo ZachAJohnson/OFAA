@@ -276,6 +276,26 @@ class NeutralPseudoAtom(Atom):
 		
 		self.n_b, self.n_f = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
 
+
+
+	## Fucntions for solving for potential, etc.	
+
+	def get_φe(self, ρ):
+		# numerical rest of charge
+		κ = 1/self.rs # self.kTF
+		self.ρ_r = ρ.copy()
+		self.ρ_k = self.grid.FT_r_2_k(self.ρ_r)
+		# if False:#self.rs != self.R:
+			# n_k_screen = κ**2/(4*π) * self.grid.FT_r_2_k(self.φe)
+			# self.φe_k = 4*π*(self.ρ_k + n_k_screen)/(self.grid.ks**2 + κ**2)
+		# else:
+		self.φe_k = 4*π*self.ρ_k/self.grid.ks**2
+		self.φe_r = self.grid.FT_k_2_r(self.φe_k)
+		φe = self.φe_r.copy()
+		φe -= φe[-1]
+		return φe, np.zeros_like(φe)
+
+
 	def get_βVeff(self, φe, ne, ne_bar):
 		if self.ignore_vxc and self.gradient_correction is None:
 			βVeff = ( -φe - self.φion )/self.Te
@@ -293,11 +313,11 @@ class NeutralPseudoAtom(Atom):
 		eta = μ/self.Te - βVeff
 		return eta
 
-	def make_ne_TF(self):
-		"""
-		Sets e-density using self μ
-		"""
-		self.ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+	# def make_ne_TF(self):
+	# 	"""
+	# 	Sets e-density using self μ
+	# 	"""
+	# 	self.ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 
 	def get_ne_TF(self, φe, ne, μ, ne_bar):
 		"""
@@ -309,9 +329,40 @@ class NeutralPseudoAtom(Atom):
 			None
 		"""		   
 		eta = self.get_eta_from_sum(φe, ne, μ, ne_bar)
-		ne = self.fast_n_TF( eta)
-		return ne
+		new_ne = self.fast_n_TF( eta)
+		return new_ne
 	
+	def get_ne_W(self, φe, ne, μ, ne_bar):
+		"""
+		(-λ/2 nabla^2 + V_Weizsacker) ψ = μ ψ
+		for ψ^2 = n_e
+		In k-space this is 
+
+		(λ k^2/2 - μ) ψ =  FT(V ψ) = A_tilde
+		"""
+		ηs = self.TF.η_interp(ne)
+		V_W = ηs*self.Te - φe - self.φion + self.get_vxc(ne) - self.vxc_f(ne_bar) # the von Weiszacker potential 
+		A = V_W * np.sqrt(ne)
+		A_tilde = self.grid.FT_r_2_k(A) 
+		ψ_tilde = A_tilde/(self.λ_W/2*self.grid.ks**2 - μ)
+
+		new_ne = self.grid.FT_k_2_r(ψ_tilde)**2
+		return new_ne
+
+
+	def get_ne_guess(self):#, **kwargs):
+		if self.gradient_correction is not None:
+			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
+			ne_guess = self.get_ne_W(self.φe, self.ne, self.μ, self.ne_bar)
+		else:
+			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+
+		return ne_guess
+
+	def update_ne(self, alpha):#, **kwargs):
+		ne_guess = self.get_ne_guess()
+		self.ne = (1-alpha)*self.ne + alpha*ne_guess
+
 	def get_Q(self):
 		self.Qion = self.Z  + self.grid.integrate_f( self.ρi )
 		return self.Qion - self.grid.integrate_f(self.ne)
@@ -335,17 +386,28 @@ class NeutralPseudoAtom(Atom):
 		"""
 		Defined coefficients by
 		δF_K/δρ = a/ρ nabla^2 (ρ) + b/ρ^2 |nabla(ρ)|^2 
+		= 2a ( nabla^2 ψ)/ψ for ψ^2 = ne
 		"""
-		ne_k = self.grid.FT_r_2_k(ne)
-		grad_n_square = self.grid.FT_k_2_r(self.grid.ks*ne_k)
-		laplace_ne = -self.grid.FT_k_2_r(self.grid.ks**2*ne_k)
+		ψ = np.sqrt(ne)
+		laplace_ψ = self.grid.d2fdx2(ψ)	
+		aW, _ = self.get_grad_coeffs()
+		return 2*aW*laplace_ψ/ψ
+	
+	# def get_gradient_energy(self, ne):
+	# 	"""
+	# 	Defined coefficients by
+	# 	δF_K/δρ = a/ρ nabla^2 (ρ) + b/ρ^2 |nabla(ρ)|^2 
+	# 	"""
+	# 	ne_k = self.grid.FT_r_2_k(ne)
+	# 	grad_n_square = self.grid.FT_k_2_r(self.grid.ks*ne_k)
+	# 	laplace_ne = -self.grid.FT_k_2_r(self.grid.ks**2*ne_k)
 
-		if self.gradient_correction=='K':
-			eta = self.TF.η_interp(ne)
-			aW, bW = self.get_grad_coeffs(eta, ne, self.T)
-		elif self.gradient_correction=='W':
-			aW, bW = self.get_grad_coeffs()
-		return aW/ne * laplace_ne + bW/ne**2 * grad_n_square
+	# 	if self.gradient_correction=='K':
+	# 		eta = self.TF.η_interp(ne)
+	# 		aW, bW = self.get_grad_coeffs(eta, ne, self.T)
+	# 	elif self.gradient_correction=='W':
+	# 		aW, bW = self.get_grad_coeffs()
+	# 	return aW/ne * laplace_ne + bW/ne**2 * grad_n_square
 	
 
 	## Chemical Potential Methods 
@@ -479,47 +541,7 @@ class NeutralPseudoAtom(Atom):
 		self.Qion = self.Z  + self.grid.integrate_f( self.ρi )
 		# print("Qion = {}".format(self.Qion))
 
-		
-	def get_φe(self, ρ):
-		# numerical rest of charge
-		self.ρ_r = ρ.copy()
-		self.ρ_k = self.grid.FT_r_2_k(self.ρ_r)
-		self.φe_k = 4*π*self.ρ_k/self.grid.ks**2
-		self.φe_r = self.grid.FT_k_2_r(self.φe_k)
-		φe = self.φe_r.copy()
-		φe -= φe[-1]
-		return φe, np.zeros_like(φe)
-
-	def get_φe(self, ρ):
-		# numerical rest of charge
-		κ = 1/self.rs # self.kTF
-		self.ρ_r = ρ.copy()
-		self.ρ_k = self.grid.FT_r_2_k(self.ρ_r)
-		if False:#self.rs != self.R:
-			n_k_screen = κ**2/(4*π) * self.grid.FT_r_2_k(self.φe)
-			self.φe_k = 4*π*(self.ρ_k + n_k_screen)/(self.grid.ks**2 + κ**2)
-		else:
-			self.φe_k = 4*π*self.ρ_k/self.grid.ks**2
-		self.φe_r = self.grid.FT_k_2_r(self.φe_k)
-		φe = self.φe_r.copy()
-		φe -= φe[-1]
-		return φe, np.zeros_like(φe)
-
-	def get_new_ne(self, **kwargs):
-		if self.gradient_correction is not None:
-			new_ne = self.get_new_ne_W(**kwargs)
-		else:
-			new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
-
-	def update_ne(self, alpha, **kwargs):
-		if False:#self.gradient_correction is not None:
-			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
-			ne_guess = self.get_ne_W(alpha )
-		else:
-			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
-
-		self.ne = (1-alpha)*self.ne + alpha*ne_guess
-
+	
 	def make_bound_free(self, φ_shift):
 		etas = self.TF.η_interp(self.ne)
 		xmid = -self.get_βVeff(self.φe, self.ne, self.ne_bar)
@@ -615,48 +637,55 @@ class NeutralPseudoAtom(Atom):
 			old = self.μ, np.mean(self.ne), np.mean(self.φe) 
 			
 			# Update physics in this order
-			self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
-			poisson_err = np.mean(poisson_err)
-			self.update_ne(picard_alpha)
-			self.new_Zstar_guess = self.Zstar
-			if remove_ion: #Simulating removal of ion, keep μ the same.
-				pass
+			if self.gradient_correction is None:
+				self.φe, poisson_err = self.get_φe(self.ρi - self.ne)
+				poisson_err = np.mean(poisson_err)
+				self.update_ne(picard_alpha)
 			else:
-				if self.rs==self.R:
-					# get Zstar from bound/free
-					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
-						self.update_bound_free()
+				print("getting new ne")
+				self.ne_check = self.get_ne_W(self.φe, self.ne, self.μ, self.ne_bar)
+				self.ne = self.ne_check.copy()
 
-					# if n%10==0 or n<5 and not μ_converged:
-					# 	self.set_μ_neutral()
-					# elif not μ_converged: 
-					# 	self.update_μ_newton(alpha1=1e-3)
+			if self.gradient_correction is None:
+				self.new_Zstar_guess = self.Zstar
+				if remove_ion: #Simulating removal of ion, keep μ the same.
+					pass
 				else:
-					# if μ_converged==True and Zbar_converged==False and n>n_wait_update_Zstar :
-					# 	old_ne_bar = self.ne_bar
-					# 	if self.fixed_Zstar == False:
-					# 		new_Zstar = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
-					# 		if np.abs(new_Zstar/self.Zstar - 1)<1e-5:
-					# 			Zbar_converged = True
-					# 		self.ne += self.ne_bar - old_ne_bar
-					# if self.fixed_Zstar == False:
-					# 	self.update_ρi_and_Zstar_to_make_neutral() 
-					# self.set_μ_infinite()
+					if self.rs==self.R:
+						# get Zstar from bound/free
+						if self.fixed_Zstar == False and n>n_wait_update_Zstar:
+							self.update_bound_free()
 
-					
-					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
-						if n%100==0:
-							old_ne_bar = self.ne_bar
-							self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
-							self.ne   += self.ne_bar - old_ne_bar
-					
-					self.update_ρi_and_Zstar_to_make_neutral()
-				# self.set_μ_infinite()
-				if n%10==0 or n<5 and not μ_converged:
-					self.set_μ_neutral()
-				elif not μ_converged: 
-					self.update_μ_newton(alpha1=1e-3)
-					# self.set_μ_neutral()
+						# if n%10==0 or n<5 and not μ_converged:
+						# 	self.set_μ_neutral()
+						# elif not μ_converged: 
+						# 	self.update_μ_newton(alpha1=1e-3)
+					else:
+						# if μ_converged==True and Zbar_converged==False and n>n_wait_update_Zstar :
+						# 	old_ne_bar = self.ne_bar
+						# 	if self.fixed_Zstar == False:
+						# 		new_Zstar = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
+						# 		if np.abs(new_Zstar/self.Zstar - 1)<1e-5:
+						# 			Zbar_converged = True
+						# 		self.ne += self.ne_bar - old_ne_bar
+						# if self.fixed_Zstar == False:
+						# 	self.update_ρi_and_Zstar_to_make_neutral() 
+						# self.set_μ_infinite()
+
+						
+						if self.fixed_Zstar == False and n>n_wait_update_Zstar:
+							if n%100==0:
+								old_ne_bar = self.ne_bar
+								self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
+								self.ne   += self.ne_bar - old_ne_bar
+						
+						self.update_ρi_and_Zstar_to_make_neutral()
+					# self.set_μ_infinite()
+					if n%10==0 or n<5 and not μ_converged:
+						self.set_μ_neutral()
+					elif not μ_converged: 
+						self.update_μ_newton(alpha1=1e-3)
+						# self.set_μ_neutral()
 
 					
 					

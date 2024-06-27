@@ -515,8 +515,9 @@ class NeutralPseudoAtom(Atom):
 			
 			
 			b = np.zeros(self.grid.Nx)
-			b[0]    = 8*np.pi/9*ρ[0]*x[0]
-			b[-1]  =  0#(+self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
+			b[0]    = 8*np.pi/9*ρ[0]*x[0] # 8*np.pi/9*ρ[0]*x[0]
+			# b[0]    = -20*self.grid.vols[0]*ρ[0]/x[1]**2
+			b[-1]  =  5#(+self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
 			b[1:-1]= 4*π*ρ[1:-1]
 
 			return A, b

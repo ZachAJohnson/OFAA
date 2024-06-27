@@ -185,6 +185,7 @@ class NonUniformGrid(OneDGrid):
 		self.cells = cell_boundary_points
 		self.vols = 4/3*π*(self.cells[1:]**3 - self.cells[:-1]**3)
 		self.dx = self.xs[1:]-self.xs[:-1]
+		self.dL = self.cells[1:] - self.cells[:-1]
 		self.bulk_indcs = slice(1,-1)
 		self.grid_shape = self.Nx
 	
@@ -199,7 +200,7 @@ class NonUniformGrid(OneDGrid):
 		"""
 		First order derivative of some function.
 		"""
-		fgrad = np.gradient(f, self.xs, edge_order=2)
+		fgrad = np.gradient(f, self.xs, edge_order=1)
 		
 		return fgrad
 
@@ -259,5 +260,6 @@ class NonUniformGrid(OneDGrid):
 		A = A1 + A2 
 		Abulk =  np.zeros((self.Nx, self.Nx)) # Is N x N
 		Abulk[1:-1,:] = A[1:-1,:]
+
 
 		return Abulk
