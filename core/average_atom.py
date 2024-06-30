@@ -18,7 +18,7 @@ from hnc.hnc.hnc import Integral_Equation_Solver as IET
 from hnc.hnc.constants import *
 
 from .grids import NonUniformGrid
-from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve
+from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve, Ndiagsolve
 from .physics import FermiDirac, ThomasFermi, χ_Lindhard, χ_TF, More_TF_Zbar, Fermi_Energy, n_from_rs, Debye_length
 
 import matplotlib.pyplot as plt
@@ -86,7 +86,7 @@ class NeutralPseudoAtom(Atom):
 	"""
 	def __init__(self, Z, A, Ti, Te, rs, R, initialize=True, gradient_correction=None, Weizsacker_λ = 1, μ_init = None, Zstar_init = 'More', 
 		rmin=2e-2, Npoints=100, iet_R_over_rs = None, iet_N_bins = 2000, name='',ignore_vxc=False, fixed_Zstar = False, use_full_ne_for_nf=False,
-		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic'):
+		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2):
 		super().__init__(Z, A, name=name)
 		"""
 		Generates an average atom (rs=R) or neutral pseudo atom (R>>r).
@@ -134,7 +134,8 @@ class NeutralPseudoAtom(Atom):
 
 		# Instantiate 1-D grid and ThomasFermi
 		print("	Intializing grid")
-		self.grid = NonUniformGrid(rmin, R, Npoints, self.rs, spacing=grid_spacing)
+		self.N_stencil_oneside = N_stencil_oneside 
+		self.grid = NonUniformGrid(rmin, R, Npoints, self.rs, spacing=grid_spacing, N_stencil_oneside=N_stencil_oneside)
 		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
 		self.make_fast_n_TF()
 
@@ -351,7 +352,7 @@ class NeutralPseudoAtom(Atom):
 		δF_K/δρ = a/ρ nabla^2 (ρ) + b/ρ^2 |nabla(ρ)|^2 
 		"""
 		grad_n = self.grid.dfdx(ne)
-		laplace_ne = 1/self.grid.xs**2 * self.grid.dfdx(self.grid.xs**2 * grad_n)
+		laplace_ne = self.grid.A_laplace.dot(ne)
 
 		if self.gradient_correction=='K':
 			eta = self.TF.η_interp(ne)
@@ -492,8 +493,51 @@ class NeutralPseudoAtom(Atom):
 		self.Qion = self.Z  + self.grid.integrate_f( self.ρi )
 		# print("Qion = {}".format(self.Qion))
 
+	# def get_φe(self, ρ):
+	# 	"""
+	# 	Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
+	# 	Returns:
+	# 		float err: residual Ax-b 
+	# 	"""
+		
+	# 	def explicit_Ab(): #With BC at core and edge
+	# 		#### A ####
+	# 		### FIRST BULK VALUES ###
+	# 		A = -self.grid.A_laplace
+			
+	# 		dx= self.grid.dx
+	# 		x = self.grid.xs
+	# 		### BOUNDARIES ###
+	# 		A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
+	# 		A[0,1] = -1/dx[0]
+	# 		A[-1,-1] = 1 # Sets φe[-1]=0
+	# 		# A[-1,-1] = 1#/dx[-1] # Sets grad φe[-1]=0
+	# 		# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
+			
+			
+	# 		b = np.zeros(self.grid.Nx)
+	# 		b[0]    = 8*np.pi/9*ρ[0]*x[0] # 8*np.pi/9*ρ[0]*x[0]
+	# 		# b[0]    = -20*self.grid.vols[0]*ρ[0]/x[1]**2
+	# 		b[-1]  =  5#(+self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
+	# 		b[1:-1]= 4*π*ρ[1:-1]
+
+	# 		return A, b
+
+	# 	# Use function to create A, b
+	# 	A, b = explicit_Ab()
+	# 	self.Ab = A, b
+
+	# 	φe = tridiagsolve(A, b)
+	# 	# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
+
+	# 	# φe = φe - φe[-1]
+	# 	rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
+		
+	# 	return φe, rel_errs
+
 	def get_φe(self, ρ):
 		"""
+		5 diagonal
 		Use solve_banded to solve Poisson Equation for φe using charge density ρ, which might be ρ = self.ρi - self.ne for example 
 		Returns:
 			float err: residual Ax-b 
@@ -502,13 +546,12 @@ class NeutralPseudoAtom(Atom):
 		def explicit_Ab(): #With BC at core and edge
 			#### A ####
 			### FIRST BULK VALUES ###
-			A = -self.grid.matrix_laplacian()
+			A = -self.grid.A_laplace
 			
 			dx= self.grid.dx
 			x = self.grid.xs
 			### BOUNDARIES ###
-			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
-			A[0,1] = -1/dx[0]
+			A[0,:] =  self.grid.A_dfdx[0,:] # get electric field at origin 
 			A[-1,-1] = 1 # Sets φe[-1]=0
 			# A[-1,-1] = 1#/dx[-1] # Sets grad φe[-1]=0
 			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
@@ -526,7 +569,7 @@ class NeutralPseudoAtom(Atom):
 		A, b = explicit_Ab()
 		self.Ab = A, b
 
-		φe = tridiagsolve(A, b)
+		φe = Ndiagsolve(A, b, self.N_stencil_oneside)
 		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
 
 		# φe = φe - φe[-1]
@@ -548,20 +591,16 @@ class NeutralPseudoAtom(Atom):
 		def explicit_Ab(): #With BC at core and edge
 			#### A ####
 			### FIRST BULK VALUES ###
-			A = -self.grid.matrix_laplacian()
+			A = -self.grid.A_laplace
 			inner_diag_indices = ( np.arange(1, self.grid.Nx-1 ), np.arange(1, self.grid.Nx-1 ) )
 			A[inner_diag_indices] += self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
 
 			dx= self.grid.dx
 			x = self.grid.xs
 			### BOUNDARIES ###
-			A[0,0] =  1/dx[0] # Only E-field from electrons, zero from plasma ions
-			A[0,1] = -1/dx[0]
+			A[0,:] =  self.grid.A_dfdx[0,:] # get electric field at origin 
 			A[-1,-1] = 1 # Sets φe[-1]=0
 
-			# A[-1,-1] = 1/dx[-1] # Sets grad φe[-1]=0
-			# A[-1,-2] = -1/dx[-1] # Sets grad φe[-1]=0
-			
 			
 			b = np.zeros(self.grid.Nx)
 			b[0]    = 8*np.pi/9*ρ[0]*x[0]
@@ -574,7 +613,7 @@ class NeutralPseudoAtom(Atom):
 		A, b = explicit_Ab()
 		self.Ab = A, b
 
-		φe = tridiagsolve(A, b)
+		φe = Ndiagsolve(A, b, self.N_stencil_oneside)
 		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
 
 		# φe = φe - φe[-1]
@@ -582,37 +621,6 @@ class NeutralPseudoAtom(Atom):
 		
 		return φe, rel_errs
 	
-	# def get_φe_iet(self, ρ):
-	# 	# Setting up analytic ρ, φ for exact cancellation with central ion
-	# 	## iet space
-	# 	r, Z, rs, R = self.iet.r_array*self.rs, self.Z, self.rs, self.R
-	# 	λ=20/rs # rs
-	# 	Q = self.grid.integrate_f(ρ) # -Z
-	# 	self.iet.ρ0_r = λ**3*Q/(8*π) * np.exp(-λ*r) # analytically normalized to cancel Z
-
-	# 	### aa space
-	# 	r, Z, rs, R = self.grid.xs, self.Z, self.rs, self.R
-	# 	ε = 1e-10 # ε->0
-	# 	Γ = gammaincc(ε, r*λ)*gamma(ε) 
-	# 	self.φe0_iet = Q/r*(1-np.exp(-r*λ)) - 1/2*Q*λ**2*Γ
-	# 	self.ρ0_r_iet = λ**3*Q/(8*π) * np.exp(-λ*r)
-
-	# 	# numerical rest of charge
-	# 	self.iet.ρ_r = interp1d(self.grid.xs, ρ, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
-	# 	self.iet.δρ_r = self.iet.ρ_r - self.iet.ρ0_r
-	# 	self.iet.δρ_k = self.iet.FT_r_2_k(self.iet.δρ_r)
-	# 	self.iet.δφe_k = 4*π*self.iet.δρ_k/(self.iet.k_array/self.rs)**2
-	# 	self.iet.δφe_r = self.iet.FT_k_2_r(self.iet.δφe_k)
-
-	# 	self.iet.δφe_r = self.iet.δφe_r
-	# 	δφe = interp1d(self.iet.r_array*self.rs, self.iet.δφe_r, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
-	# 	φe = self.φe0_iet + δφe
-	# 	φe -= φe[-1]
-	# 	return φe, np.zeros_like(φe)
-
-	# def convert_density_grid_to_ftgrid(self, ρ):
-	# 	f_iet = interp1d(np.log(self.grid.xs), f, bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)
-
 	def get_φe_iet(self, ρ):
 		# numerical rest of charge
 		Q_from_ρ = self.grid.integrate_f(ρ)

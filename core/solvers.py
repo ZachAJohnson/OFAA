@@ -16,6 +16,21 @@ def tridiagsolve(A, b):
 	x = solve_banded((1,1), Ab, b)
 	return x	
 
+def Ndiagsolve(A, b, N_bands_above):
+	N_bands = int(2*N_bands_above+1)
+	N = np.shape(b)[0]
+	Ab = np.zeros((N_bands, N))
+
+	Ab[N_bands_above, :] = np.diag(A,k=0) # middle
+
+	for i in range(1, N_bands_above + 1 ): # above
+		Ab[N_bands_above - i, i:] = np.diag(A,k=i)
+
+	for i in range(1, N_bands_above + 1 ): # below
+		Ab[N_bands_above + i, :-i] = np.diag(A,k=-i)
+
+	x = solve_banded((N_bands_above,N_bands_above), Ab, b)
+	return x  
 
 def gmres_ilu(A, b, tol=1e-4):
 	# Convert the matrix A to Compressed Sparse Column (CSC) format
