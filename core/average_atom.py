@@ -144,10 +144,13 @@ class NeutralPseudoAtom(Atom):
 		if gradient_correction is not None:
 			self.set_gradient_correction()
 			self.λ_W = Weizsacker_λ
-		
+
+		print(f"Initializing, {initialize}")
 		if initialize:
 			# Initializing densities and potentials
+			print("Initializing")
 			self.reinitialize()
+			print("Initialized")
 			self.gii_initial = self.gii.copy()
 
 		if rs==R:
@@ -678,41 +681,6 @@ class NeutralPseudoAtom(Atom):
 
 		self.ne = (1-alpha)*self.ne + alpha*ne_guess
 
-	def small_update(self, f_new, f_old, alpha, type = 'exp', l_decay = None):
-		delta = f_new - f_old	
-
-		small_steps = np.array([alpha*delta , 0.1*np.sign(delta)*f_old])
-
-		#Update relative to size of current rho
-		if type=='rel':
-			f_return = f_old + small_steps[0]
-
-		#Update absolute 
-		elif type=='abs':
-			f_return = f_old + small_steps[1]
-
-		# Minimum of two
-		elif type=='both':
-			absmin = lambda vec_list: np.array([  vec[ np.argmin(np.abs(vec))] for vec in vec_list])
-
-			smallest_steps = absmin(small_steps.T)
-		
-			f_return = f_old + smallest_steps
-
-		elif type=='exp':
-			absmin = lambda vec_list: np.array([  vec[ np.argmin(np.abs(vec))] for vec in vec_list])
-
-			smallest_steps = absmin(small_steps.T)
-			
-			if l_decay is None:
-				l_decay = 1/(0.25*self.kTF)
-			short_distance_weight = np.exp(-self.grid.xs/l_decay)
-			# short_distance_weight = np.exp(-np.log(10)* 4*self.grid.xs/self.grid.xmax ) 
-
-			f_return = f_old + smallest_steps*short_distance_weight
-
-		self.steps = small_steps[0]
-		return f_return
 
 	def make_bound_free(self, φ_shift):
 		etas = self.TF.η_interp(self.ne)
@@ -815,7 +783,10 @@ class NeutralPseudoAtom(Atom):
 
 			self.new_Zstar_guess = self.Zstar
 			if remove_ion: #Simulating removal of ion, keep μ the same.
-				pass
+				if n%10==0 or n<5 and not μ_converged:
+					self.set_μ_neutral()
+				elif not μ_converged: 
+					self.update_μ_newton(alpha1=1e-3)
 			else:
 				if self.rs==self.R:
 					# get Zstar from bound/free
@@ -827,34 +798,22 @@ class NeutralPseudoAtom(Atom):
 					elif not μ_converged: 
 						self.update_μ_newton(alpha1=1e-3)
 				else:
-					# if μ_converged==True and Zbar_converged==False and n>n_wait_update_Zstar :
-					# 	old_ne_bar = self.ne_bar
-					# 	if self.fixed_Zstar == False:
-					# 		new_Zstar = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
-					# 		if np.abs(new_Zstar/self.Zstar - 1)<1e-5:
-					# 			Zbar_converged = True
-					# 		self.ne += self.ne_bar - old_ne_bar
-					# if self.fixed_Zstar == False:
-					# 	self.update_ρi_and_Zstar_to_make_neutral() 
-					# self.set_μ_infinite()
-
-					
 					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
-						if change<1e-5:
+						if change<1e-5:# and n%1==0:
+						# if n%==0:
 							old_ne_bar = self.ne_bar
 							new_Zstar  = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
 							self.ne   += self.ne_bar - old_ne_bar
 					
 					self.update_ρi_and_Zstar_to_make_neutral()
-					# if n%10==0 or n<5 and not μ_converged:
+					
+					# if n%1==0 or n<5:# and not μ_converged:
 					self.set_μ_infinite()
 					self.set_μ_neutral()	
-					# else:
-					# self.update_μ_newton(alpha1=1e-3)
-
+					# elif not μ_converged: 
+					# 	self.update_μ_newton(alpha1=1e-3)
 					
-					
-			
+	
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
 
@@ -1066,7 +1025,7 @@ class NeutralPseudoAtom(Atom):
 		axs[1].plot(self.grid.xs, self.ne , 'k', label=r'$n_e$')
 		axs[1].plot(self.grid.xs, self.n_b, label=r'$n_b$')
 		axs[1].plot(self.grid.xs, self.n_f, label=r'$n_f$')
-		axs[1].plot(self.grid.xs, self.ρi, label=r'$ Z^\ast n^0_i g_ii(r) $ ')
+		axs[1].plot(self.grid.xs, self.ρi, label=r'$ Z^\ast n^0_i g_{ii}(r) $ ')
 		axs[1].plot(self.grid.xs, np.abs(self.ρi - self.ne), label=r'$|\Sigma_j \rho_j|$ ')
 
 		axs[1].set_ylabel(r'$n_e$ [A.U.]',fontsize=20)
