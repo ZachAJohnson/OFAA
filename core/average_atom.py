@@ -220,17 +220,6 @@ class NeutralPseudoAtom(Atom):
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
-	# ### Saving data
-	# def save_data(self):
-	# 	header = ("# All units in [AU] if not specified\n"+
- #          '{{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.3e}, "T[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs) + 
-	# 	  '\t r[AU]  \t n[AU]  \t nf[AU]  \t nb[AU]     n_ion[AU]    (φ_e+φ_ions)[AU]   φtotal[AU]     δVxc/δρ[Au]  ') 
-	# 	data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe, self.φe + self.φion, self.vxc_f(self.ne)] ).T
-		
-	# 	txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
-	# 	self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
-	# 	np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
-		
 	def set_physical_params(self):
 		self.ni_bar = 1/self.WSvol # Average Ion Density of plasma
 		self.ne_bar = self.Zstar * self.ni_bar # Average Electron Density of plasma
@@ -620,6 +609,66 @@ class NeutralPseudoAtom(Atom):
 			γ = np.sqrt(self.ne)*self.grid.xs
 			b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
 			c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
+
+			A = -self.grid.A_d2fdx2 + np.diag(c)
+
+			#Boundary
+			dx= self.grid.dx
+			x = self.grid.xs
+			
+			# Interior- Kato cusp condition
+			interior_bc = 'kato'
+			if interior_bc in ['kato','Kato']:
+				# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
+				# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
+				# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
+				
+				# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
+				A[0, :] = self.grid.A_dfdx[0,:] 
+				b[0]   = γ[0]*(1/x[0] - self.Z)
+				
+
+			elif interior_bc == 'zero': # Sets γ to zero
+				A[0,0] = 1/self.grid.dx[0]**2
+				b[0] = 0
+
+			# Exterior- γ''= 0 at edge is nice
+			# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
+			# A[-1,-2] = -2/(dx[-1]*dx[-2])           
+			# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
+			
+			# Exterior- dγdr=γ/r
+			A[-1,:] = self.grid.A_dfdx[-1,:]
+
+			b[-1]  = γ[-1]/x[-1]
+			
+
+			return A, b		
+
+		A, b = banded_Ab()
+		self.Ab_W = A, b
+		γs = Ndiagsolve(A, b, self.N_stencil_oneside)
+		self.γs = γs
+
+		new_ne = γs**2/self.grid.xs**2
+		new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
+
+		return new_ne
+	def get_ne_W(self, constant_hλ=False):
+
+		def banded_Ab():
+			# - d^2/dr2 γ = bc_vec(γ) γ 
+			# bc_vec(γ) = 2/λW (μ - ηT - Vcol - Vxc ) 
+			etas = self.TF.η_interp(self.ne)
+			if not self.ignore_vxc:
+				bc_vec  = 2/self.λ_W*(-self.Te*etas + (self.μ - self.ϕe - self.ϕion + self.vxc_f(self.ne) - self.vxc_f(self.ne_bar)) )
+			if self.ignore_vxc:
+				bc_vec  = 2/self.λ_W*(-self.Te*etas + (self.μ - self.ϕe - self.ϕion ))
+					
+			# Split to gaurantee positive solution 
+			γ = np.sqrt(self.ne)*self.grid.xs
+			b = -np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
+			c = -np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
 
 			A = -self.grid.A_d2fdx2 + np.diag(c)
 
