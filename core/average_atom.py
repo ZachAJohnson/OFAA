@@ -1,4 +1,4 @@
-#Zach Johnson 2022
+ 	#Zach Johnson 2022
 # Neutral Pseudo Atom code
 
 import numpy as np
@@ -206,17 +206,27 @@ class NeutralPseudoAtom(Atom):
 
 	### Saving data
 	def save_data(self):
+		# Electron File
 		err_info = f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
-		aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {5:.3e}, "rs[AU]": {6:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.rs)
+		aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te,self.Ti, self.rs)
 		column_names = f"   {'r[AU]':15} {'n[AU]':15} {'nf[AU]':15} {'nb[AU]':15} {'n_ion[AU]':15} {'φtot[AU]':15} {'δVxc/δρ[Au]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
 		header = ("# All units in Hartree [AU] if not specified\n"+
 			    err_info + aa_info + column_names)   
 		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe + self.φion, self.vxc_f(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
 		
-		if self.Te==self.Ti:
-			txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_T{4:.1e}eV_Zstar{5:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Zstar)
-		else:
-			txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_Zstar{6:.1f}.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV,self.Ti*AU_to_eV, self.Zstar)
+		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_electron_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
+		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
+
+		# Ion file
+		err_info = f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
+		aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.Ti, self.rs)
+		column_names = f"   {'r[AU]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
+		header = ("# All units in Hartree [AU] if not specified\n"+
+			    err_info + aa_info + column_names)   
+		data = np.array([self.iet.r_array*self.rs, self.Uei_iet, self.iet.βu_r_matrix[0,0]*self.Ti , self.iet.h_r_matrix[0,0]+1 ] ).T
+		
+		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_IET_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
@@ -420,6 +430,9 @@ class NeutralPseudoAtom(Atom):
 		if self.χ_type == 'Lindhard':
 			self.χee = lambda k: χ_Lindhard(k, self.kF)
 			self.χee = np.vectorize(self.χee)
+		if self.χ_type == 'TF':
+			self.χee = lambda k: χ_TF(k, self.kF)
+			self.χee = np.vectorize(self.χee)
 
 	def make_Uei(self):
 		if self.use_full_ne_for_nf == True:
@@ -590,70 +603,70 @@ class NeutralPseudoAtom(Atom):
 		
 		return φe, rel_errs
 	
-	def get_ne_W(self, constant_hλ=False):
+	# def get_ne_W(self, constant_hλ=False):
 
-		def banded_Ab():
-			etas = self.TF.η_interp(self.ne)
-			if self.gradient_correction=='K':
-				aW, bW = self.get_grad_coeffs(etas, self.ne, self.Te)
-				print("bW term NOT supported, please switch to 'W' gradient_correction_type for now.")
-			elif self.gradient_correction=='W':
-				aW, bW = self.get_grad_coeffs()
+	# 	def banded_Ab():
+	# 		etas = self.TF.η_interp(self.ne)
+	# 		if self.gradient_correction=='K':
+	# 			aW, bW = self.get_grad_coeffs(etas, self.ne, self.Te)
+	# 			print("bW term NOT supported, please switch to 'W' gradient_correction_type for now.")
+	# 		elif self.gradient_correction=='W':
+	# 			aW, bW = self.get_grad_coeffs()
 
-			if not self.ignore_vxc:
-				bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion - self.vxc_f(self.ne) + self.vxc_f(self.ne_bar)) )
-			if self.ignore_vxc:
-				bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion ))
+	# 		if not self.ignore_vxc:
+	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion - self.vxc_f(self.ne) + self.vxc_f(self.ne_bar)) )
+	# 		if self.ignore_vxc:
+	# 			bc_vec  = -1/(2*aW)*(self.Te*etas - (self.μ + self.ϕe + self.ϕion ))
 					
-			# Split to gaurantee positive solution 
-			γ = np.sqrt(self.ne)*self.grid.xs
-			b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
-			c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
+	# 		# Split to gaurantee positive solution 
+	# 		γ = np.sqrt(self.ne)*self.grid.xs
+	# 		b = np.max([0*self.grid.xs, -bc_vec], axis=0)*γ # will go on right side
+	# 		c = np.max([0*self.grid.xs,  bc_vec], axis=0) # will go on left side
 
-			A = -self.grid.A_d2fdx2 + np.diag(c)
+	# 		A = -self.grid.A_d2fdx2 + np.diag(c)
 
-			#Boundary
-			dx= self.grid.dx
-			x = self.grid.xs
+	# 		#Boundary
+	# 		dx= self.grid.dx
+	# 		x = self.grid.xs
 			
-			# Interior- Kato cusp condition
-			interior_bc = 'kato'
-			if interior_bc in ['kato','Kato']:
-				# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
-				# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
-				# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
+	# 		# Interior- Kato cusp condition
+	# 		interior_bc = 'kato'
+	# 		if interior_bc in ['kato','Kato']:
+	# 			# A[0,0]  = 1; A[0,1] = -1/(1 + self.grid.dx[0]*(-self.Z+ 1/self.grid.xs[1])) 
+	# 			# A[0,0:2] *= 1/self.grid.dx[0]**2  #get number more similar to other matrix values
+	# 			# b[0] = -(self.Z + 1/self.grid.xs[0])*γ[0]/self.grid.dx[0]
 				
-				# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
-				A[0, :] = self.grid.A_dfdx[0,:] 
-				b[0]   = γ[0]*(1/x[0] - self.Z)
+	# 			# retry- use Z~0 for rmin<<1, so exactly γ(r)=r/r_0 γ(r_0), applied to first point, or γ[1] - γ[0]x[1]/x[0]=0
+	# 			A[0, :] = self.grid.A_dfdx[0,:] 
+	# 			b[0]   = γ[0]*(1/x[0] - self.Z)
 				
 
-			elif interior_bc == 'zero': # Sets γ to zero
-				A[0,0] = 1/self.grid.dx[0]**2
-				b[0] = 0
+	# 		elif interior_bc == 'zero': # Sets γ to zero
+	# 			A[0,0] = 1/self.grid.dx[0]**2
+	# 			b[0] = 0
 
-			# Exterior- γ''= 0 at edge is nice
-			# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
-			# A[-1,-2] = -2/(dx[-1]*dx[-2])           
-			# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
+	# 		# Exterior- γ''= 0 at edge is nice
+	# 		# A[-1,-1] =  2/dx[-1]  /(dx[-1] + dx[-2])
+	# 		# A[-1,-2] = -2/(dx[-1]*dx[-2])           
+	# 		# A[-1,-3] =  2/dx[-2]/(dx[-1] + dx[-2])
 			
-			# Exterior- dγdr=γ/r
-			A[-1,:] = self.grid.A_dfdx[-1,:]
+	# 		# Exterior- dγdr=γ/r
+	# 		A[-1,:] = self.grid.A_dfdx[-1,:]
 
-			b[-1]  = γ[-1]/x[-1]
+	# 		b[-1]  = γ[-1]/x[-1]
 			
 
-			return A, b		
+	# 		return A, b		
 
-		A, b = banded_Ab()
-		self.Ab_W = A, b
-		γs = Ndiagsolve(A, b, self.N_stencil_oneside)
-		self.γs = γs
+	# 	A, b = banded_Ab()
+	# 	self.Ab_W = A, b
+	# 	γs = Ndiagsolve(A, b, self.N_stencil_oneside)
+	# 	self.γs = γs
 
-		new_ne = γs**2/self.grid.xs**2
-		new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
+	# 	new_ne = γs**2/self.grid.xs**2
+	# 	new_ne = new_ne * self.Z/self.grid.integrate_f(new_ne) # normalize so it is reasonable
 
-		return new_ne
+	# 	return new_ne
 	def get_ne_W(self, constant_hλ=False):
 
 		def banded_Ab():
@@ -720,18 +733,22 @@ class NeutralPseudoAtom(Atom):
 			new_ne = self.get_new_ne_W(**kwargs)
 		else:
 			new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+		return new_ne	
 
-	def update_ne(self, alpha, **kwargs):
+	def get_ne_picard(self, alpha, **kwargs):
 		if self.gradient_correction is not None:
 			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
 			ne_guess = self.get_ne_W(alpha )
 		else:
 			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 
-		self.ne = (1-alpha)*self.ne + alpha*ne_guess
+		ne_picard = (1-alpha)*self.ne + alpha*ne_guess
+		return ne_picard 
 
+	def update_ne_picard(self, alpha, **kwargs):
+		self.ne = self.get_ne_picard(alpha)
 
-	def make_bound_free(self, φ_shift):
+	def make_bound_free(self):
 		etas = self.TF.η_interp(self.ne)
 		xmid = -self.get_βVeff(self.φe, self.ne, self.ne_bar)
 		c = 0.05
@@ -739,8 +756,24 @@ class NeutralPseudoAtom(Atom):
 
 		self.n_b = ThomasFermi.n_bound_TF(self.Te, etas, xmid )*fcut
 		self.n_f = self.ne - self.n_b  
-		
-	def update_bound_free(self, φ_shift=0, alpha = 2e-1):
+	
+	def get_newton_change(self, x0, x1, y0, y1):
+		dydx = (y1- y0)/(x1 - x0)
+		Δx_21_guess = -y1/dydx # meaning, x2 = x1 + Δx_21_guess
+		return Δx_21_guess
+
+	def newton_update_from_guess(self, x0, x1, x1_guess_from_x0, x2_guess_from_x1, constrained=True, α=0.25):
+		Δx0 = x1_guess_from_x0 - x0 # Idea is we want 
+		Δx1 = x2_guess_from_x1 - x1
+		newton_change = self.get_newton_change(x0, x1, Δx0, Δx1)
+		if constrained == True:
+			x2 = x1 + np.sign(newton_change) * np.min([np.abs(x1)*0.25, np.abs(newton_change)])
+		else:
+			x2 = x1 + newton_change
+		# print(f"Old: ΔZ_new {ΔZ_new}, ΔZ_old {ΔZ_old}, dZguess_dZ {dZguess_dZ}, newton_change {newton_change}")
+		return x2
+
+	def update_ne_newton(self, alpha = 2e-1):
 		"""
 		Gets bound free separation using approximation  in ThomasFermi. 
 		Only iteratively updates Zstar
@@ -748,27 +781,46 @@ class NeutralPseudoAtom(Atom):
 			Exact Zstar using bound, free.
 
 		"""
-		self.make_bound_free(φ_shift)
+		self.new_ne_guess = self.get_new_ne()
+
+		try: # Do newton
+			new_ne = self.newton_update_from_guess(self.old_ne, self.ne, self.old_ne_guess, self.new_ne_guess, constrained=True)
+			self.old_ne_guess = self.new_ne_guess.copy()
+			self.old_ne = self.ne.copy()
+			self.ne = new_ne
+
+		except AttributeError:	 # Do Picard
+			self.old_ne = self.ne.copy()
+			self.ne = (1-alpha)*self.ne + alpha*self.new_ne_guess
+		
+		self.old_ne_guess = self.new_ne_guess.copy()
+
+	def update_newton_Zstar(self, alpha = 2e-1):
+		"""
+		Gets bound free separation using approximation  in ThomasFermi. 
+		Only iteratively updates Zstar
+		Returns: 
+			Exact Zstar using bound, free.
+
+		"""
+		self.make_bound_free()
 
 		self.new_Zstar_guess = self.Z - self.grid.integrate_f(self.n_b)
 
 		try:
-			ΔZ_new = (self.new_Zstar_guess - self.Zstar)
-			ΔZ_old = (self.old_Zstar_guess - self.old_Zstar)
-			dZguess_dZ = (ΔZ_new - ΔZ_old)/(self.Zstar - self.old_Zstar)
+			new_Zstar = self.newton_update_from_guess(self.old_Zstar, self.Zstar, self.old_Zstar_guess, self.new_Zstar_guess)
 			self.old_Zstar = self.Zstar
-			newton_change = -ΔZ_new/dZguess_dZ
-			self.Zstar = self.Zstar + np.sign(newton_change) * np.min([self.Zstar*0.25, np.abs(newton_change)])
-
+			self.old_Zstar_guess = self.new_Zstar_guess
+			self.Zstar = new_Zstar
+			
 		except AttributeError:	
 			self.old_Zstar = self.Zstar
-			self.Zstar = self.Zstar + alpha*(self.new_Zstar_guess-self.Zstar) #smaller nonzero update
+			self.Zstar = (1-alpha)*self.Zstar + alpha*(self.new_Zstar_guess-self.Zstar) #smaller nonzero update
 		
 		self.old_Zstar_guess = self.new_Zstar_guess
 
 		if self.Zstar<=0.01:
 			self.Zstar = 0.01
-
 
 		#Update ne_bar, free density etc.
 		self.set_physical_params() 
@@ -801,7 +853,8 @@ class NeutralPseudoAtom(Atom):
 		# print("		Errs: ", rel_err(new,old))
 		return coeffs @ rel_err(new,old)
 	
-	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, remove_ion = False, save_steps=False, n_wait_update_Zstar = 100):
+	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, n_wait_newton_ne = 20,
+			remove_ion = False, save_steps=False, n_wait_update_Zstar = 100):
 		"""
 		Solve TF OFDFT equation, assuming a given Zbar for the plasma ions 
 		"""
@@ -817,7 +870,7 @@ class NeutralPseudoAtom(Atom):
 		self.ne_bar_list = [self.ne_bar]
 		self.μ_list, self.rho_err_list, self.change_list = [self.μ], [0], [0]
 		self.φe_list = [self.φe]
-		
+		self.new_Zstar_guess = self.Zstar
 		Q = 0
 		n = 0
 		converged, μ_converged, Zbar_converged = False, False, False
@@ -828,41 +881,38 @@ class NeutralPseudoAtom(Atom):
 			# Update physics in this order
 			self.φe, poisson_err = self.get_φe_screened(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
-			self.update_ne(picard_alpha)
+			# if n > n_wait_newton_ne:
+			# 	self.update_ne_newton()
+			# else:
+			self.update_ne_picard(alpha=picard_alpha)
 
-			self.new_Zstar_guess = self.Zstar
-			if remove_ion: #Simulating removal of ion, keep μ the same.
-				if n%10==0 or n<5 and not μ_converged:
-					self.set_μ_neutral()
-				elif not μ_converged: 
-					self.update_μ_newton(alpha1=1e-3)
-			else:
-				if self.rs==self.R:
-					# get Zstar from bound/free
-					if self.fixed_Zstar == False:
-						new_Zstar = self.update_bound_free()
-
+			if not remove_ion: # Normal Route
+				if self.rs==self.R: # IS model
+					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
+						self.update_newton_Zstar() 			# get Zstar from bound/free
 					if n%10==0 or n<5 and not μ_converged:
 						self.set_μ_neutral()
 					elif not μ_converged: 
 						self.update_μ_newton(alpha1=1e-3)
-				else:
+				else: # CS model
 					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
-						if change<1e-5:# and n%1==0:
-						# if n%==0:
+						if  n%1==0 and not Zbar_converged:
 							old_ne_bar = self.ne_bar
-							new_Zstar  = self.update_bound_free(alpha=1e-1 ) # also picard updates Zstar
+							self.update_newton_Zstar()
 							self.ne   += self.ne_bar - old_ne_bar
 					
 					self.update_ρi_and_Zstar_to_make_neutral()
-					
-					# if n%1==0 or n<5:# and not μ_converged:
 					self.set_μ_infinite()
 					self.set_μ_neutral()	
-					# elif not μ_converged: 
-					# 	self.update_μ_newton(alpha1=1e-3)
-					
-	
+
+
+			else: #Simulating removal of ion, keep μ the same.
+				if n%10==0 or n<5 and not μ_converged:
+					self.set_μ_neutral()
+				elif not μ_converged: 
+					self.update_μ_newton(alpha1=1e-3)
+
+			# Convergence testing
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
 
@@ -878,8 +928,16 @@ class NeutralPseudoAtom(Atom):
 			self.ρi_list.append(self.ρi.copy())
 			self.ne_bar_list.append(self.ne_bar)
 
-			if np.abs(1-self.μ/old[0])<1e-3:
+			# μ and Zbar convergence tests
+			if np.abs(1-self.μ/old[0])<1e-5:
 				μ_converged = True
+			else:
+				μ_converged = False
+			
+			if np.abs(1-self.Zstar/self.new_Zstar_guess)<1e-5:
+				Zbar_converged = True
+			else:
+				Zbar_converged = False
 
 			if verbose and (n%25==0 or n<10):
 				print("__________________________________________")
@@ -896,7 +954,7 @@ class NeutralPseudoAtom(Atom):
 				if  change<tol and abs(rho_err)<tol:
 					converged=True
 			else:
-				if abs(Q)<1e-3 and change<tol and abs(rho_err)<tol:
+				if abs(Q)<1e-3 and change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
 					converged=True
 			n+=1
 
@@ -1078,7 +1136,7 @@ class NeutralPseudoAtom(Atom):
 		axs[1].plot(self.grid.xs, np.abs(self.ρi - self.ne), label=r'$|\Sigma_j \rho_j|$ ')
 
 		axs[1].set_ylabel(r'$n_e$ [A.U.]',fontsize=20)
-		# axs[1].set_ylim(self.ρi[-1]*1e-3,1e6)
+		axs[1].set_ylim(self.ρi[-1]*1e-3,1e6)
 		#axs[1].set_yscale('symlog',linthresh=1e-3)
 		axs[1].set_yscale('log')
   
