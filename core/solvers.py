@@ -33,7 +33,7 @@ def Ndiagsolve(A, b, N_bands_above):
 	return x  
 
 def Ndiageig(A, N_bands_above):
-	N_bands = int(2*N_bands_above+1)
+	N_bands = int(N_bands_above+1) # eigs is only upper!
 	N = np.shape(A)[0]
 	Ab = np.zeros((N_bands, N))
 
@@ -42,10 +42,10 @@ def Ndiageig(A, N_bands_above):
 	for i in range(1, N_bands_above + 1 ): # above
 		Ab[N_bands_above - i, i:] = np.diag(A,k=i)
 
-	for i in range(1, N_bands_above + 1 ): # below
-		Ab[N_bands_above + i, :-i] = np.diag(A,k=-i)
+	# for i in range(1, N_bands_above + 1 ): # below
+	# 	Ab[N_bands_above + i, :-i] = np.diag(A,k=-i)
 
-	x = eig_banded(Ab)
+	x = eig_banded(Ab , lower=False)
 	return x  
 
 def gmres_ilu(A, b, tol=1e-4):

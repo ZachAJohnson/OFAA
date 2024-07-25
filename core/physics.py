@@ -356,7 +356,7 @@ class ThomasFermi():
 		"""
 		libxc_func  = pylibxc.LibXCFunctional("LDA_XC_KSDT",'unpolarized')
 		dfdrho  = lambda rho: libxc_func.compute({'rho':rho})['zk'][0,0]
-		vdfdrho = np.vectorize(dfdrho)
+		# vdfdrho = np.vectorize(dfdrho)
 		return dfdrho(rho)
 
 	def Vxc_density_prime(self,rho,*args):
@@ -367,8 +367,19 @@ class ThomasFermi():
 	    """
 	    libxc_func  = pylibxc.LibXCFunctional("LDA_XC_GDSMFB",'unpolarized')
 	    dfdrho  = lambda rho: libxc_func.compute({'rho':rho})['vrho'][0,0]
-	    vdfdrho = np.vectorize(dfdrho)
+	    # vdfdrho = np.vectorize(dfdrho)
 	    return dfdrho(rho)
+	    
+	def Vxc_density_prime(self,rho,*args):
+		"""
+		Full functional derivative of Vxc, delta Vxc/delta n, or if Vxc = integral(vxc), then 
+		this function returns  
+		    delta^2 Vxc/delta n delta n = vxc + n d(vxc)/dn
+		"""
+		libxc_func  = pylibxc.LibXCFunctional("LDA_XC_GDSMFB",'unpolarized')
+		d2fdrho2  = lambda rho: libxc_func.compute({'rho':rho})['v2rho2'][0,0]
+		# vdfdrho = np.vectorize(dfdrho)
+		return d2fdrho2(rho)
 
 	def fast_vxc(self):
 	    rhoe = np.geomspace(1e-5,1e8,num=10000)
