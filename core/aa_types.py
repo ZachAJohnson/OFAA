@@ -1,6 +1,13 @@
-from .average_atom_new import AverageAtom
-
+from scipy.interpolate import interp1d
 import numpy as np
+
+import os
+from .config import CORE_DIR, PACKAGE_DIR
+
+from .average_atom_new import AverageAtom
+from hnc.hnc.constants import *
+
+
 
 # Prebuilt Average Atom Models
 class AverageAtomFactory:
@@ -13,16 +20,15 @@ class AverageAtomFactory:
             return NeutralPseudoAtomModel(Z, A, Ti, Te, rs, R,*args, **kwargs)
         
         elif model_type == 'TFStarret2014':
-            return TFStarret2014(Z, A, Ti, Te, rs, R, *args, **kwargs)
-        
-        elif model_type == 'EmptyAtom':
-            return EmptyAtom(Z, A, Ti, Te, rs, R, *args, **kwargs)
+            model_kwargs = {'rmin':1e-3, 'Npoints':1000, 'grid_spacing':'geometric'}
+            model_kwargs.update(kwargs)
+            return TFStarret2014(Z, A, Ti, Te, rs, R, *args, **model_kwargs)
         
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
 # Average Atom Types
-class EmptyAtom(AverageAtom):
+class TFStarret2014_EmptyAtom(AverageAtom):
     def __init__(self, Z, A, Ti, Te, rs, R, Zstar,  **kwargs):
         super().__init__(Z, A, Ti, Te, rs, R, Zstar_init=Zstar, **kwargs)
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
@@ -51,15 +57,27 @@ class EmptyAtom(AverageAtom):
         model_kwargs.update(kwargs)
         self.solve_TF(**model_kwargs)
 
-class TFStarret2014(AverageAtom):
-    def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):
-        super().__init__(Z, A, Ti, Te, rs, R, **kwargs)
+class TFStarret2014_core(AverageAtom):
+    """
+    Based on Charlie Starrett's (CS) and Didier Saumon (2014)
+        'A simple method for determining the ionic structure of warm dense matter' 
+    """
+    def __init__(self, Z, A, Ti, Te, rs, **kwargs):
+        super().__init__(Z, A, Ti, Te, rs, rs, **kwargs)
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "CS2014"
+        self.name=""
 
-    def update_bulk_params(self):
-        pass
+    def update_bulk_params(self):    
+        # self.update_newton_Zstar()          # get Zstar from bound/free
+        # if n%10==0 or n<5 and not μ_converged:
+        self.set_μ_neutral()
+        self.ne_bar = self.ne[-1] # a CS specific idea
+        self.Zstar = self.ne_bar/self.ni_bar
 
+        # elif not μ_converged: 
+            # self.update_μ_newton(alpha1=1e-3)
+        
     def get_ne_guess(self):
         ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
         return ne_guess
@@ -73,6 +91,81 @@ class TFStarret2014(AverageAtom):
         model_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
         model_kwargs.update(kwargs)
         self.solve_TF(**model_kwargs)
+        self.set_physical_params()
+        self.make_bound_free()
+        self.ne_bar = self.ne[-1] # a CS specific idea
+        self.Zstar = self.ne_bar/self.ni_bar
+
+
+class TFStarret2014(AverageAtom):
+    """
+    Based on Charlie Starrett's (CS) and Didier Saumon (2014)
+        'A simple method for determining the ionic structure of warm dense matter' 
+    """
+    def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):
+        super().__init__(Z, A, Ti, Te, rs, R, initialize=False, **kwargs)
+        self.ignore_vxc = kwargs.get('ignore_vxc', True)
+        self.aa_type = "CS2014"
+        self.kwargs = kwargs
+
+    def setup_core_atom(self):
+        self.core_atom = TFStarret2014_core(self.Z, self.A, self.Ti, self.Te, self.rs, **self.kwargs)
+
+    def setup_empty_atom(self):
+        self.empty_atom = TFStarret2014_EmptyAtom(self.Z, self.A, self.Ti, self.Te, self.rs, self.R, self.core_atom.Zstar, **self.kwargs)
+
+    def solve(self, **kwargs):
+        # Thomas-Fermi specific solving logic
+        print("Setting up and solving core.")
+        self.setup_core_atom()
+        self.core_atom.solve(**kwargs)
+        print("Settin up and solving empty atom")
+        self.setup_empty_atom()
+        self.empty_atom.solve(**kwargs)
+        self.combine_models()
+        self.save_data()
+
+    def combine_models(self):
+        logr_data = np.log(self.core_atom.grid.xs)
+        log_ne_data = np.where(self.core_atom.ne==0, np.log(1e-20), np.log(self.core_atom.ne) )
+        log_nb_data = np.where(self.core_atom.nb==0, np.log(1e-20), np.log(self.core_atom.nb) )
+        
+        self.ne_full = np.exp(interp1d(logr_data, log_ne_data, bounds_error=False, fill_value = (log_ne_data[0], log_ne_data[-1]) )(np.log(self.grid.xs)))
+        self.n_ion   = np.exp(interp1d(logr_data, log_nb_data, bounds_error=False, fill_value = (log_nb_data[0], log_nb_data[-1]) )(np.log(self.grid.xs)))
+        self.ne_ext  = self.empty_atom.ne
+        self.ne_PA   = self.ne_full - self.ne_ext
+        self.ne_scr  = self.ne_PA - self.n_ion
+        self.ρi = self.empty_atom.ρi
+        self.Zstar = self.grid.integrate_f(self.ne_scr)
+        print(f"Check combination is neutral: {self.Z} = {self.grid.integrate_f(self.ne_PA):0.3e}")
+         
+    ### Saving data
+    def save_data(self):
+        # Electron File
+        err_info = " " #f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
+        aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ_core[AU]": {4:.10e}, "μ_empty[AU]": {5:.10e}, "Te[AU]": {6:.3e}, "Ti[AU]": {7:.3e}, "rs[AU]": {8:.3e} }}\n'.format("CS2014_" + self.name, self.Z, self.Zstar, self.A, self.core_atom.μ, self.empty_atom.μ, self.Te,self.Ti, self.rs)
+        column_names = f"   {'r[AU]':15} {'ne_full[AU]':15} {'n_ion[AU]':15} {'ne_ext[AU]':15} {'ne_PA[AU]':15} {'ne_scr[AU]':15} "
+        header = ("Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
+        #           "# All units in Hartree [AU] if not specified\n"+
+                err_info + aa_info + column_names)   
+        data = np.array([self.grid.xs, self.ne_full, self.n_ion, self.ne_ext, self.ne_PA, self.ne_scr] ).T
+        
+        txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_electron_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
+        self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+        np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
+
+        # # Ion file
+        # err_info = f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
+        # aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.Ti, self.rs)
+        # column_names = f"   {'r[AU]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
+        # header = ("Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
+        #           "# All units in Hartree [AU] if not specified\n"+
+        #             err_info + aa_info + column_names)   
+        # data = np.array([self.iet.r_array*self.rs, self.Uei_iet, self.iet.βu_r_matrix[0,0]*self.Ti , self.iet.h_r_matrix[0,0]+1 ] ).T
+        
+        # txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_IET_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
+        # self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+        # np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
 class ThomasFermiModel(AverageAtom):
     def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):

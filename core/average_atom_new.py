@@ -85,7 +85,7 @@ class AverageAtom(Atom):
 	A NeutralPseudoAtom class
 	"""
 	def __init__(self, Z, A, Ti, Te, rs, R, initialize=True, μ_init = None, Zstar_init = 'More', 
-		rmin=2e-2, Npoints=100, iet_R_over_rs = None, iet_N_bins = 2000, name='', ignore_vxc=False, fixed_Zstar = False, use_full_ne_for_nf=False,
+		rmin=2e-2, Npoints=500, iet_R_over_rs = None, iet_N_bins = 2000, name='', ignore_vxc=False, fixed_Zstar = False, use_full_ne_for_nf=False,
 		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2):
 		super().__init__(Z, A, name=name)
 		"""
@@ -174,8 +174,8 @@ class AverageAtom(Atom):
 		self.φe = self.interp_to_grid(old_xs, self.φe)
 		self.φion = self.Z/self.grid.xs - self.Z/self.R#self.grid.xmax #1/r with zero at boundary 
 		self.ne = self.interp_to_grid(old_xs, self.ne)
-		self.n_b = self.interp_to_grid(old_xs, self.n_b)
-		self.n_f = self.interp_to_grid(old_xs, self.n_f)
+		self.nb = self.interp_to_grid(old_xs, self.nb)
+		self.nf = self.interp_to_grid(old_xs, self.nf)
 		self.gii = self.interp_to_grid(old_xs, self.gii)
 		self.ni = self.interp_to_grid(old_xs, self.ni)
 		self.ρi = self.interp_to_grid(old_xs, self.ρi)
@@ -197,7 +197,7 @@ class AverageAtom(Atom):
 		column_names = f"   {'r[AU]':15} {'n[AU]':15} {'nf[AU]':15} {'nb[AU]':15} {'n_ion[AU]':15} {'φtot[AU]':15} {'δVxc/δρ[Au]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
 		header = ("# All units in Hartree [AU] if not specified\n"+
 			    err_info + aa_info + column_names)   
-		data = np.array([self.grid.xs, self.ne, self.n_f, self.n_b, self.ni, self.φe + self.φion, self.vxc_f(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
+		data = np.array([self.grid.xs, self.ne, self.nf, self.nb, self.ni, self.φe + self.φion, self.vxc_f(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
 		
 		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_electron_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
 		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
@@ -291,7 +291,7 @@ class AverageAtom(Atom):
 			self.set_μ_neutral()
 
 		
-		self.n_b, self.n_f = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
+		self.nb, self.nf = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
 
 	# def get_βVeff(self, φe, ne, ne_bar):
 	# 	if self.ignore_vxc and self.gradient_correction is None:
@@ -396,7 +396,7 @@ class AverageAtom(Atom):
 			nf = self.ne.copy()
 			nf = np.where(nf<=1e-30, 1e-30, nf)
 		else:
-			nf = self.n_f.copy() #+ self.ni_bar
+			nf = self.nf.copy() #+ self.ni_bar
 			nf = np.where(nf<=1e-30, 1e-30, nf)
 
 		etas = self.TF.η_interp(nf) # η = β( μ + self.φe + self.φion - self.vxc_f(ne)  )         
@@ -538,12 +538,14 @@ class AverageAtom(Atom):
 			### BOUNDARIES ###
 			A[0,:] =  -self.grid.A_dfdx[0,:] # get electric field at origin 
 			A[-1,:] *= 0 #Ensure boundary condition only at edge 
-			A[-1,-1] = 1 # Sets φe[-1]=0
+			# A[-1,-1] = 1 # Sets φe[-1]=0
+			A[-1,:] = self.grid.A_dfdx[-1,:]#1 # Sets φe[-1]=0
 
 			
 			b = np.zeros(self.grid.Nx)
 			b[0]    = 0*8*np.pi/9*ρ[0]*x[0]
 			b[-1]  =  0#-(self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
+			b[-1]  =  -self.grid.A_dfdx[-1,:].dot(self.φion)
 			b[1:-1]= 4*π*ρ[1:-1] + self.φe[1:-1] * self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
 
 			return A, b
@@ -586,8 +588,8 @@ class AverageAtom(Atom):
 		c = 0.05
 		fcut = (1 + np.exp(-1/c))/( 1 + np.exp( ( self.grid.xs - self.rs)/(c*self.rs)) )
 
-		self.n_b = ThomasFermi.n_bound_TF(self.Te, etas, xmid )*fcut
-		self.n_f = self.ne - self.n_b  
+		self.nb = ThomasFermi.n_bound_TF(self.Te, etas, xmid )*fcut
+		self.nf = self.ne - self.nb  
 	
 	def get_newton_change(self, x0, x1, y0, y1):
 		dydx = (y1- y0)/(x1 - x0)
@@ -637,7 +639,7 @@ class AverageAtom(Atom):
 		"""
 		self.make_bound_free()
 
-		self.new_Zstar_guess = self.Z - self.grid.integrate_f(self.n_b)
+		self.new_Zstar_guess = self.Z - self.grid.integrate_f(self.nb)
 
 		try:
 			new_Zstar = self.newton_update_from_guess(self.old_Zstar, self.Zstar, self.old_Zstar_guess, self.new_Zstar_guess)
@@ -782,7 +784,7 @@ class AverageAtom(Atom):
 			# 		converged=True
 			# else:
 				# if abs(Q)<1e-3 and change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
-			if change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
+			if change<tol and abs(rho_err)<tol:# and μ_converged and Zbar_converged:
 				converged=True
 			n+=1
 
@@ -834,7 +836,7 @@ class AverageAtom(Atom):
 		self.make_ρi() #reset Qion 
 
 		# Result - Compute fluctuation density
-		self.δn_f = self.n_f - self.empty_ne  # Linear response free density
+		self.δn_f = self.nf - self.empty_ne  # Linear response free density
 
 
 	##############################	
@@ -900,8 +902,8 @@ class AverageAtom(Atom):
 		# axs[1].plot(self.petrov.r_data, self.petrov.rho_data + self.petrov.rho_0, 'k--', label="Petrov AA")
 		axs[1].plot(self.grid.xs, self.ne , label=r'$n_e$')
 		axs[1].plot(self.grid.xs, self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar) , label=r'$\frac{\sqrt{2}}{\pi^2}T^{3/2}\mathcal{I}_{1/2}(\eta)$')
-		axs[1].plot(self.grid.xs, self.n_b, label=r'$n_b$')
-		axs[1].plot(self.grid.xs, self.n_f, label=r'$n_f$')
+		axs[1].plot(self.grid.xs, self.nb, label=r'$n_b$')
+		axs[1].plot(self.grid.xs, self.nf, label=r'$n_f$')
 		axs[1].plot(self.grid.xs, self.ρi, label=r'$ Z^\ast n^0_i g_{ii}(r) $ ')
 		axs[1].plot(self.grid.xs, self.ρi - self.ne, label=r'$\Sigma_j \rho_j$ ')
 		
@@ -947,8 +949,8 @@ class AverageAtom(Atom):
 		factor = 4*np.pi*self.grid.xs**2
 		# axs[0].plot(self.petrov.r_data, 4*np.pi*self.petrov.r_data**2*(self.petrov.rho_data + self.petrov.rho_0), 'k--', label="Petrov AA")
 		axs[0].plot(self.grid.xs, self.ne*factor ,'--.k',label=r'$n_e$')
-		axs[0].plot(self.grid.xs, self.n_b*factor, label=r'$n_b$')
-		axs[0].plot(self.grid.xs, self.n_f*factor, label=r'$n_f$')
+		axs[0].plot(self.grid.xs, self.nb*factor, label=r'$n_b$')
+		axs[0].plot(self.grid.xs, self.nf*factor, label=r'$n_f$')
 		
 		
 		axs[0].set_ylabel(r'$4 \pi r^2 n_e(r) $ [A.U.]',fontsize=20)
@@ -958,8 +960,8 @@ class AverageAtom(Atom):
 		# Density ne plot
 		# axs[1].plot(self.petrov.r_data, self.petrov.rho_data + self.petrov.rho_0, 'k--', label="Petrov AA")
 		axs[1].plot(self.grid.xs, self.ne , 'k', label=r'$n_e$')
-		axs[1].plot(self.grid.xs, self.n_b, label=r'$n_b$')
-		axs[1].plot(self.grid.xs, self.n_f, label=r'$n_f$')
+		axs[1].plot(self.grid.xs, self.nb, label=r'$n_b$')
+		axs[1].plot(self.grid.xs, self.nf, label=r'$n_f$')
 		axs[1].plot(self.grid.xs, self.ρi, label=r'$ Z^\ast n^0_i g_{ii}(r) $ ')
 		axs[1].plot(self.grid.xs, np.abs(self.ρi - self.ne), label=r'$|\Sigma_j \rho_j|$ ')
 
@@ -1001,8 +1003,8 @@ class AverageAtom(Atom):
 		for ax in axs:
 			# ax.plot(self.petrov.r_data, 4*np.pi*self.petrov.r_data**2*(self.petrov.rho_data + self.petrov.rho_0), 'k--', label="Petrov AA")
 			ax.plot(self.grid.xs, self.ne*factor ,'--.k',label=r'$n_e$')
-			ax.plot(self.grid.xs, self.n_b*factor, label=r'$n_b$')
-			ax.plot(self.grid.xs, self.n_f*factor, label=r'$n_f$')
+			ax.plot(self.grid.xs, self.nb*factor, label=r'$n_b$')
+			ax.plot(self.grid.xs, self.nf*factor, label=r'$n_f$')
 
 			ax.set_ylabel(r'$4 \pi r^2 n_e(r) $ [A.U.]',fontsize=20)
 			ax.set_xlabel(r'$|r-R_1|$ [A.U.]',fontsize=20)
@@ -1012,7 +1014,7 @@ class AverageAtom(Atom):
 
 		# axs[0].set_ylim(1e-2, np.max(factor*self.ne*1.5))
 		axs[0].set_ylim(0, np.max((factor*self.ne)[:self.rws_index]*1.5))
-		# axs[0].set_xlim(0, self.grid.xs[np.argmax(factor*self.n_b)]*2)
+		# axs[0].set_xlim(0, self.grid.xs[np.argmax(factor*self.nb)]*2)
 		axs[0].set_xlim(0, self.rs)
 		
 		axs[1].set_ylim(1e-2, np.max(factor*self.ne*1.5))
