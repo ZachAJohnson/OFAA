@@ -1,30 +1,55 @@
 from .average_atom_new import AverageAtom
 
+import numpy as np
+
 # Prebuilt Average Atom Models
 class AverageAtomFactory:
     @staticmethod
-    def create_model(model_type, Z, A, Ti, Te, rs, R, **kwargs):
+    def create_model(model_type, Z, A, Ti, Te, rs, R, *args, **kwargs):
         if model_type == 'ThomasFermi':
-            return ThomasFermiModel(Z, A, Ti, Te, rs, R, **kwargs)
+            return ThomasFermiModel(Z, A, Ti, Te, rs, R, *args, **kwargs)
+        
         elif model_type == 'NeutralPseudoAtom':
-            return NeutralPseudoAtomModel(Z, A, Ti, Te, rs, R, **kwargs)
+            return NeutralPseudoAtomModel(Z, A, Ti, Te, rs, R,*args, **kwargs)
+        
         elif model_type == 'TFStarret2014':
-            return TFStarret2014(Z, A, Ti, Te, rs, R, **kwargs)
+            return TFStarret2014(Z, A, Ti, Te, rs, R, *args, **kwargs)
+        
         elif model_type == 'EmptyAtom':
-            return EmptyAtom(Z, A, Ti, Te, rs, R, **kwargs)
+            return EmptyAtom(Z, A, Ti, Te, rs, R, *args, **kwargs)
+        
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
 # Average Atom Types
 class EmptyAtom(AverageAtom):
-    def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):
-        super().__init__(Z, A, Ti, Te, rs, R, **kwargs)
+    def __init__(self, Z, A, Ti, Te, rs, R, Zstar,  **kwargs):
+        super().__init__(Z, A, Ti, Te, rs, R, Zstar_init=Zstar, **kwargs)
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "Empty"
+        # Runs TF to get empty-atom electron density
+        self.ne = self.ne_bar*np.ones(self.grid.Nx)
+        self.φion = np.zeros_like(self.ne)
+        self.Qion = self.grid.integrate_f( self.ρi )
+        self.ne_bar = self.Zstar*self.ni_bar
+        self.μ = self.get_μ_infinite()
+
+    def update_bulk_params(self):
+        pass
+
+    def get_ne_guess(self):
+        ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+        return ne_guess
+
+    def get_βVeff(self, φe, ne, ne_bar):
+        βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
+        return βVeff
 
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
-        self.solve_TF(**kwargs)
+        model_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
+        model_kwargs.update(kwargs)
+        self.solve_TF(**model_kwargs)
 
 class TFStarret2014(AverageAtom):
     def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):
@@ -32,9 +57,22 @@ class TFStarret2014(AverageAtom):
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "CS2014"
 
+    def update_bulk_params(self):
+        pass
+
+    def get_ne_guess(self):
+        ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+        return ne_guess
+
+    def get_βVeff(self, φe, ne, ne_bar):
+        βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
+        return βVeff
+
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
-        self.solve_TF(**kwargs)
+        model_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
+        model_kwargs.update(kwargs)
+        self.solve_TF(**model_kwargs)
 
 class ThomasFermiModel(AverageAtom):
     def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):

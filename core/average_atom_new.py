@@ -293,17 +293,19 @@ class AverageAtom(Atom):
 		
 		self.n_b, self.n_f = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
 
-	def get_βVeff(self, φe, ne, ne_bar):
-		if self.ignore_vxc and self.gradient_correction is None:
-			βVeff = ( -φe - self.φion )/self.Te
-		elif self.ignore_vxc==False and self.gradient_correction is None:
-			βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
-		elif self.ignore_vxc and self.gradient_correction is not None:
-			βVeff = ( -φe - self.φion + self.get_gradient_energy(ne))/self.Te
-		elif self.ignore_vxc==False and self.gradient_correction is not None:
-			βVeff = ( -φe - self.φion + self.get_gradient_energy(ne) + self.vxc_f(ne) - self.vxc_f(ne_bar))/self.Te
+	# def get_βVeff(self, φe, ne, ne_bar):
+	# 	if self.ignore_vxc and self.gradient_correction is None:
+	# 		βVeff = ( -φe - self.φion )/self.Te
+	# 	elif self.ignore_vxc==False and self.gradient_correction is None:
+	# 		βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
+	# 	elif self.ignore_vxc and self.gradient_correction is not None:
+	# 		βVeff = ( -φe - self.φion + self.get_gradient_energy(ne))/self.Te
+	# 	elif self.ignore_vxc==False and self.gradient_correction is not None:
+	# 		βVeff = ( -φe - self.φion + self.get_gradient_energy(ne) + self.vxc_f(ne) - self.vxc_f(ne_bar))/self.Te
 
-		return βVeff
+	# 	return βVeff
+
+
 
 	def get_eta_from_sum(self, φe, ne, μ, ne_bar):
 		βVeff = self.get_βVeff(φe, ne, ne_bar)
@@ -559,20 +561,19 @@ class AverageAtom(Atom):
 		return φe, rel_errs
 	
 
-	def get_new_ne(self, **kwargs):
-		if self.gradient_correction is not None:
-			new_ne = self.get_new_ne_W(**kwargs)
-		else:
-			new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
-		return new_ne	
+	# def get_ne_guess(self, **kwargs):
+	# 	if self.gradient_correction is not None:
+	# 		new_ne = self.get_ne_guess_W(**kwargs)
+	# 	else:
+	# 		new_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+	# 	return new_ne	
 
 	def get_ne_picard(self, alpha, **kwargs):
-		if self.gradient_correction is not None:
-			# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
-			ne_guess = self.get_ne_W(alpha )
-		else:
-			ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
-
+		# if self.gradient_correction is not None:
+		# 	# Above updates very slowly when gradients are very small, so we add in the update based on TF integral  	
+		# 	ne_guess = self.get_ne_W(alpha )
+		# else:
+		ne_guess = self.get_ne_guess()#self.φe, self.ne, self.μ, self.ne_bar)
 		ne_picard = (1-alpha)*self.ne + alpha*ne_guess
 		return ne_picard 
 
@@ -612,7 +613,7 @@ class AverageAtom(Atom):
 			Exact Zstar using bound, free.
 
 		"""
-		self.new_ne_guess = self.get_new_ne()
+		self.new_ne_guess = self.get_ne_guess()
 
 		try: # Do newton
 			new_ne = self.newton_update_from_guess(self.old_ne, self.ne, self.old_ne_guess, self.new_ne_guess, constrained=True)
@@ -684,18 +685,15 @@ class AverageAtom(Atom):
 		# print("		Errs: ", rel_err(new,old))
 		return coeffs @ rel_err(new,old)
 	
-	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, n_wait_newton_ne = 20,
-			remove_ion = False, save_steps=False, n_wait_update_Zstar = 100):
+	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, save_steps=False,
+				 n_wait_update_Zstar = 100):
 		"""
 		Solve TF OFDFT equation, assuming a given Zbar for the plasma ions 
 		"""
 		if verbose:
 			print("Beginning self-consistent electron solver.")
 			print("_________________________________")
-		if remove_ion == True:
-			self.φion = 0*self.grid.xs
-			self.Qion = self.grid.integrate_f( self.ρi )
-
+		
 		self.ne_list = [self.ne.copy()]
 		self.ρi_list = [self.ρi.copy()]
 		self.ne_bar_list = [self.ne_bar]
@@ -712,11 +710,9 @@ class AverageAtom(Atom):
 			# Update physics in this order
 			self.φe, poisson_err = self.get_φe_screened(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
-			# if n > n_wait_newton_ne:
-			# 	self.update_ne_newton()
-			# else:
 			self.update_ne_picard(alpha=picard_alpha)
-
+			self.update_bulk_params()
+			"""
 			if not remove_ion: # Normal Route
 				if self.rs==self.R: # IS model
 					if self.fixed_Zstar == False and n>n_wait_update_Zstar:
@@ -742,7 +738,7 @@ class AverageAtom(Atom):
 					self.set_μ_neutral()
 				elif not μ_converged: 
 					self.update_μ_newton(alpha1=1e-3)
-
+			"""
 			# Convergence testing
 			TF_ne = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
 			rho_err = self.rel_error(TF_ne, self.ne, weight=4*π*self.grid.xs**2, abs=True)
@@ -781,12 +777,13 @@ class AverageAtom(Atom):
 				print("	Change = {0:10.3e}".format(change))
 
 			# Converged ?
-			if remove_ion:
-				if  change<tol and abs(rho_err)<tol:
-					converged=True
-			else:
-				if abs(Q)<1e-3 and change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
-					converged=True
+			# if remove_ion:
+			# 	if  change<tol and abs(rho_err)<tol:
+			# 		converged=True
+			# else:
+				# if abs(Q)<1e-3 and change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
+			if change<tol and abs(rho_err)<tol and μ_converged and Zbar_converged:
+				converged=True
 			n+=1
 
 		print("__________________________________________")
@@ -888,10 +885,10 @@ class AverageAtom(Atom):
 		axs[0].plot(self.grid.xs , self.φion, label=r"$\phi_{ion}$")
 		axs[0].plot(self.grid.xs , -self.φe, label=r"$-\phi_{e}$")
 		axs[0].plot(self.grid.xs , self.φe + self.φion, label=r"$\phi$")
-		if not self.ignore_vxc:
-			axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
-		if self.gradient_correction is not None:
-			axs[0].plot(self.grid.xs , -self.get_gradient_energy(self.ne) , label=r"$-v_{W}[n_e]$")
+		# if not self.ignore_vxc:
+		# 	axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
+		# if self.gradient_correction is not None:
+		# 	axs[0].plot(self.grid.xs , -self.get_gradient_energy(self.ne) , label=r"$-v_{W}[n_e]$")
 		axs[0].plot(self.grid.xs , -self.get_βVeff(self.φe, self.ne, self.ne_bar)*self.Te , label=r"$-V_{\rm eff}$")
 
 
