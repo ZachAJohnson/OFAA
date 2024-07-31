@@ -226,7 +226,7 @@ class AverageAtom(Atom):
 		self.kTF = 1/self.λTF
 
 		self.κ   = self.λTF*self.rs
-		self.φ_κ_screen = self.κ
+		self.φ_κ_screen = 3/self.rs#self.κ
 		self.Γ   = self.Zstar**2/(self.rs*self.Ti)
 		self.make_χee()
 
@@ -257,42 +257,51 @@ class AverageAtom(Atom):
 
 		# Initializing densities 
 		self.initialize_ne()
+		# self.set_μ_infinite()
 
 		print("Intialized Potentials and Densities")
 
 	### Initializing
 	def initialize_ne(self):
 		"""
-		Initial Guess for electron charge densit using Debye-Huckel exponent
+		Initial Guess for electron charge densit using 
+		"Approximate Solution of the Thomas–Fermi Equation for Free Positive Ions" 
+			by Aleksey A. Mavrin and Alexander V. Demura 
 		"""
 		
 		# Use approximate density based on plasma electron density, ignoring unknown W correction
-		self.ne = self.ne_bar * np.ones_like(self.grid.xs)
-		# if self.rs == self.R:
-		self.set_μ_neutral()
-		# else:
-		# 	self.set_μ_infinite()
+		r_TF = 1/4 * ((9*π**2)/(2*self.Z))**(1/3)
+		x = lambda r: r/r_TF
+		Φ0_Mavrin_Demura = lambda x: ((1 + 1.81061 * x**(1/2) + 0.60112 * x) / (1 + 1.81061 * x**(1/2) + 1.39515 * x + 0.77112 * x**(3/2) + 0.21465 * x**2 + 0.04793 * x**(5/2)))**2
+		z = lambda x: np.log(1+x) 
+		η0_Mavrin_Demura = lambda x: np.exp(z(x) + 0.3837 * z(x)**2 + 0.0892 * z(x)**3 - 0.0170 * z(x)**4) - 1
+		# q = More_TF_Zbar(self.Z, n_from_rs(self.rs), self.Te)/self.Z
+		q = self.Zstar_init/self.Z
+		x0_func = lambda q: 10.232/q**(1/3) * (1 - 0.917 * q**0.257) if q<=0.45 else 2.960* ((1-q)/q)**(2/3)
+		x0 = x0_func(q)
+		k = -Φ0_Mavrin_Demura(x0)/η0_Mavrin_Demura(x0)
+		Φ_Mavrin_Demura = lambda x: Φ0_Mavrin_Demura(x) + k * η0_Mavrin_Demura(x)  
+		nb_Mavrin_Demura_func = lambda r: np.nan_to_num(self.Z/(4*π*r_TF**3) * (Φ_Mavrin_Demura(x(r))/x(r) )**1.5)
 
-		eta_approx = self.μ/self.Te - self.get_βVeff(self.φe, self.ne, self.ne_bar)
+		nb_Mavrin_Demura = nb_Mavrin_Demura_func(self.grid.xs)
+		Nb_Mavrin_Demura = self.grid.integrate_f(nb_Mavrin_Demura)
+		# nf_Mavrin_Demura = (self.Z - Nb_Mavrin_Demura)/self.Vol * np.ones_like(self.grid.xs)
+		nf_Mavrin_Demura = self.ne_bar * np.ones_like(self.grid.xs)
+		ne_Mavrin_Demura  = nb_Mavrin_Demura + nf_Mavrin_Demura 
 
-		self.ne_init_core  = self.fast_n_TF( eta_approx ) #self.Z/self.WSvol*self.grid.ones
-		if self.rs == self.R:
-			self.ne_init = self.ne_init_core
-			self.ne = self.ne_init.copy() # Update actual density
-		else:
-			transition_func = np.exp(-0.5*(self.grid.xs/self.rs)**2)
-			self.ne_init_outer = (1-transition_func)*self.ρi*np.ones_like(self.grid.xs)
-			netQ_outer = self.grid.integrate_f(self.ρi - self.ne_init_outer)
-			remaining_Q = self.Z + netQ_outer 
-			self.ne_init_core *= transition_func
-			self.ne_init_core *= remaining_Q/self.grid.integrate_f(self.ne_init_core)
-			self.ne_init = self.ne_init_core + self.ne_init_outer
-			self.ne = self.ne_init.copy() # Update actual density
-			self.set_μ_neutral()
+		self.nb_init = nb_Mavrin_Demura
+		self.nf_init = nf_Mavrin_Demura
+		self.ne_init = ne_Mavrin_Demura
 
-		
-		self.nb, self.nf = self.grid.zeros.copy(), self.grid.zeros.copy() #Initializing bound, free 
+		self.nb = self.nb_init 
+		self.nf = self.nf_init 
+		self.ne = self.ne_init 
 
+		self.set_μ_infinite()
+	def get_βVeff(self, φe, ne, ne_bar):
+		βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
+		return βVeff
+        
 	# def get_βVeff(self, φe, ne, ne_bar):
 	# 	if self.ignore_vxc and self.gradient_correction is None:
 	# 		βVeff = ( -φe - self.φion )/self.Te
@@ -385,11 +394,11 @@ class AverageAtom(Atom):
 	def make_χee(self):
 
 		if self.χ_type == 'Lindhard':
-			self.χee = lambda k: χ_Lindhard(k, self.kF)
-			self.χee = np.vectorize(self.χee)
+			self.χee_func = lambda k: χ_Lindhard(k, self.kF)
+			self.χee_func = np.vectorize(self.χee_func)
 		if self.χ_type == 'TF':
-			self.χee = lambda k: χ_TF(k, self.kF)
-			self.χee = np.vectorize(self.χee)
+			self.χee_func = lambda k: χ_TF(k, self.kF)
+			self.χee_func = np.vectorize(self.χee_func)
 
 	def make_Uei(self):
 		if self.use_full_ne_for_nf == True:
@@ -407,9 +416,10 @@ class AverageAtom(Atom):
 		φe_from_nf, _ = self.get_φe( (-nf + self.ρi)  ) # potential from nf itself
 
 		φ_pseudo = (totφ_pseudo - φe_from_nf)
-		self.Uei = φ_pseudo + self.Zstar/self.R
+		self.Uei = -(φ_pseudo + self.Zstar/self.R)
 
 	def make_Uei_iet(self):
+		self.make_Uei()
 		Uei_iet_interp = interp1d(self.grid.xs, self.Uei , bounds_error=False, fill_value='extrapolate')
 		
 		@np.vectorize
@@ -417,7 +427,7 @@ class AverageAtom(Atom):
 		    if r<self.grid.xs[0]:
 		        return self.Uei[0]
 		    elif r>self.grid.xs[-1]:
-		        return self.Zstar/r
+		        return -self.Zstar/r
 		    else:
 		        return Uei_iet_interp(r)
 
@@ -426,14 +436,14 @@ class AverageAtom(Atom):
 
 
 	def set_uii_eff(self):
+		self.χee_iet = self.χee_func(self.iet.k_array/self.rs)
 		self.set_physical_params()
-		self.make_Uei()
 		self.make_Uei_iet()
 		
 		u_k_Y_approx = 4*π*self.Zstar**2/(  (self.iet.k_array/self.rs)**2 + self.κ**2)
 		u_r_Y_approx = self.Zstar**2/(self.iet.r_array*self.rs)*np.exp(-self.κ*self.iet.r_array)
 
-		self.uii_k_eff_iet = 4*π*self.Zstar**2/(self.iet.k_array/self.rs)**2 + 00*self.Uei_iet_k**2 - u_k_Y_approx
+		self.uii_k_eff_iet = 4*π*self.Zstar**2/(self.iet.k_array/self.rs)**2 + self.χee_iet*self.Uei_iet_k**2 - u_k_Y_approx
 		self.uii_r_eff_iet = self.iet.FT_k_2_r(self.uii_k_eff_iet*self.rs**-3) + u_r_Y_approx
 		self.uii_eff = interp1d(self.iet.r_array*self.rs, self.uii_r_eff_iet, bounds_error=False, fill_value='extrapolate')(self.grid.xs)
 
@@ -538,14 +548,14 @@ class AverageAtom(Atom):
 			### BOUNDARIES ###
 			A[0,:] =  -self.grid.A_dfdx[0,:] # get electric field at origin 
 			A[-1,:] *= 0 #Ensure boundary condition only at edge 
-			# A[-1,-1] = 1 # Sets φe[-1]=0
-			A[-1,:] = self.grid.A_dfdx[-1,:]#1 # Sets φe[-1]=0
+			A[-1,-1] = 1 # Sets φe[-1]=0
+			# A[-1,:] = self.grid.A_dfdx[-1,:]#1 # Sets φe[-1]=0
 
 			
 			b = np.zeros(self.grid.Nx)
-			b[0]    = 0*8*np.pi/9*ρ[0]*x[0]
-			b[-1]  =  0#-(self.get_Q() + self.Z )/self.R**2 #sets φe[-1]=0
-			b[-1]  =  -self.grid.A_dfdx[-1,:].dot(self.φion)
+			b[0]    = 0#*8*np.pi/9*ρ[0]*x[0]
+			b[-1]  =  0#
+			# b[-1]  =  -self.grid.A_dfdx[-1,:].dot(self.φion)
 			b[1:-1]= 4*π*ρ[1:-1] + self.φe[1:-1] * self.φ_κ_screen**2 * np.ones( self.grid.Nx-2 )
 
 			return A, b
@@ -558,7 +568,9 @@ class AverageAtom(Atom):
 		# self.φe = jacobi_relaxation(A, b, self.φe, nmax=200) # quick smoothing, not to convergence
 
 		φe = φe - φe[-1]
-		rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
+		LHS = A @ φe
+		RHS = b
+		rel_errs = 0.5*(np.abs(LHS - RHS)[1:-1]/np.sqrt(LHS**2 + RHS**2)[1:-1])
 		
 		return φe, rel_errs
 	
@@ -653,8 +665,8 @@ class AverageAtom(Atom):
 		
 		self.old_Zstar_guess = self.new_Zstar_guess
 
-		if self.Zstar<=0.01:
-			self.Zstar = 0.01
+		if self.Zstar<=1e-6:
+			self.Zstar = 1e-6
 
 		#Update ne_bar, free density etc.
 		self.set_physical_params() 
@@ -663,8 +675,8 @@ class AverageAtom(Atom):
 	def update_ρi_and_Zstar_to_make_neutral(self, alpha = 1):
 		Zstar_needed_for_neutral = (self.grid.integrate_f(self.ne)-self.Z)/self.grid.integrate_f(self.ni)
 		self.Zstar = self.Zstar + alpha*(Zstar_needed_for_neutral - self.Zstar) #smaller nonzero update
-		if self.Zstar<=0.01:
-			self.Zstar = 0.01
+		if self.Zstar<=1e-6:
+			self.Zstar = 1e-6
 
 		self.set_physical_params()
 		self.make_ρi()
@@ -687,8 +699,7 @@ class AverageAtom(Atom):
 		# print("		Errs: ", rel_err(new,old))
 		return coeffs @ rel_err(new,old)
 	
-	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, save_steps=False,
-				 n_wait_update_Zstar = 100):
+	def solve_TF(self, verbose=False, picard_alpha = 1e-2, nmax = 1e4, tol=1e-4, save_steps=False):
 		"""
 		Solve TF OFDFT equation, assuming a given Zbar for the plasma ions 
 		"""
@@ -713,7 +724,7 @@ class AverageAtom(Atom):
 			self.φe, poisson_err = self.get_φe_screened(self.ρi - self.ne)
 			poisson_err = np.mean(poisson_err)
 			self.update_ne_picard(alpha=picard_alpha)
-			self.update_bulk_params()
+			self.update_bulk_params(n)
 			"""
 			if not remove_ion: # Normal Route
 				if self.rs==self.R: # IS model
@@ -800,43 +811,6 @@ class AverageAtom(Atom):
 		self.rho_err = rho_err
 		self.Q = Q
 		return converged
-
-	def update_Zstar(self, new_Zstar):
-		# Bisection algorithm to bound the function f_Z
-		# Update with ITP method next
-		f_Z = new_Zstar - self.Zstar
-
-		if   new_Zstar < self.Zstar:
-				self.max_Zstar = self.Zstar
-				# self.min_Zstar = np.max([new_Zstar, self.min_Zstar])
-		elif new_Zstar > self.Zstar:
-				self.min_Zstar = self.Zstar
-				# self.max_Zstar = np.min([new_Zstar, self.max_Zstar])
-
-		self.Zstar = (self.min_Zstar + self.max_Zstar)/2
-
-	def run_empty_TF(self, **kwargs):
-		# Save current info and run empty-ion shell 
-		old_ne   = self.ne.copy()   
-		old_φe   = self.φe.copy()   
-		old_φion = self.φion.copy() 
-		old_μ    = self.μ.copy()
-
-		# Runs TF to get empty-atom electron density
-		self.ne = self.ne_bar*np.ones(self.grid.Nx)
-		self.solve_TF(remove_ion = True, **kwargs)
-		self.empty_ne = self.ne.copy()
-
-		print("Empty ion ran and got μ = {0:.3e} from initial μ = {1:.3e}".format(self.μ, old_μ))
-		# Reset actual information to old stuff
-		self.ne = old_ne
-		self.φe = old_φe
-		self.φion = old_φion
-		self.μ    = old_μ
-		self.make_ρi() #reset Qion 
-
-		# Result - Compute fluctuation density
-		self.δn_f = self.nf - self.empty_ne  # Linear response free density
 
 
 	##############################	

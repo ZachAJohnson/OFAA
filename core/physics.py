@@ -133,8 +133,8 @@ def More_TF_Zbar( Z, n_AU, T_AU):
 def χ0_Lindhard(k, kF):
     ktilde = k/(2*kF) 
     Ndos = kF/π**2
-    χ0 = Ndos *(1/2 + 1/(4*ktilde)*(1-ktilde**2)*np.log(abs( (ktilde+1)/(ktilde-1) )) )#Lindhard
-    return -χ0
+    χ0 = -Ndos *(1/2 + 1/(4*ktilde)*(1-ktilde**2)*np.log(abs( (ktilde+1)/(ktilde-1) )) )#Lindhard
+    return χ0
 
 def G_SLFC(k, kF):
     """
@@ -159,7 +159,7 @@ def χ_Lindhard(k, kF):
     return χ_renorm
 
 def χ_TF(k, kTF):
-    χ_lowk = +k**2/(4*π)* kTF**2/(kTF**2 + k**2)  # Low-k full but full renormalized χ
+    # χ_lowk = +k**2/(4*π)* kTF**2/(kTF**2 + k**2)  # Low-k full but full renormalized χ
     vee = 4*π/k**2
     χ_lowk =  -1/( vee + 4*π/kTF**2)  # rewritten
     return χ_lowk

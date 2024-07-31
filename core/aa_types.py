@@ -13,14 +13,20 @@ from hnc.hnc.constants import *
 class AverageAtomFactory:
     @staticmethod
     def create_model(model_type, Z, A, Ti, Te, rs, R, *args, **kwargs):
-        if model_type == 'ThomasFermi':
-            return ThomasFermiModel(Z, A, Ti, Te, rs, R, *args, **kwargs)
+        if model_type == 'ZJ_ISModel':
+            model_kwargs = {'rmin':1e-3, 'Npoints':1000, 'grid_spacing':'geometric','iet_R_over_rs':10}
+            model_kwargs.update(kwargs)
+            return ZJ_ISModel(Z, A, Ti, Te, rs, R, *args, **model_kwargs)
+        elif model_type == 'ZJ_CSModel':
+            model_kwargs = {'rmin':1e-3, 'Npoints':1000, 'grid_spacing':'geometric'}
+            model_kwargs.update(kwargs)
+            return ZJ_CSModel(Z, A, Ti, Te, rs, R, *args, **model_kwargs)
         
         elif model_type == 'NeutralPseudoAtom':
             return NeutralPseudoAtomModel(Z, A, Ti, Te, rs, R,*args, **kwargs)
         
         elif model_type == 'TFStarret2014':
-            model_kwargs = {'rmin':1e-3, 'Npoints':1000, 'grid_spacing':'geometric'}
+            model_kwargs = {'rmin':1e-3, 'Npoints':1000, 'grid_spacing':'geometric','χ_type':'TF'}
             model_kwargs.update(kwargs)
             return TFStarret2014(Z, A, Ti, Te, rs, R, *args, **model_kwargs)
         
@@ -29,7 +35,7 @@ class AverageAtomFactory:
 
 # Average Atom Types
 class TFStarret2014_EmptyAtom(AverageAtom):
-    def __init__(self, Z, A, Ti, Te, rs, R, Zstar,  **kwargs):
+    def __init__(self, Z, A, Ti, Te, rs, R, Zstar, μ,  **kwargs):
         super().__init__(Z, A, Ti, Te, rs, R, Zstar_init=Zstar, **kwargs)
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "Empty"
@@ -38,18 +44,14 @@ class TFStarret2014_EmptyAtom(AverageAtom):
         self.φion = np.zeros_like(self.ne)
         self.Qion = self.grid.integrate_f( self.ρi )
         self.ne_bar = self.Zstar*self.ni_bar
-        self.μ = self.get_μ_infinite()
+        self.μ = μ
 
-    def update_bulk_params(self):
+    def update_bulk_params(self, iters):
         pass
 
     def get_ne_guess(self):
         ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
         return ne_guess
-
-    def get_βVeff(self, φe, ne, ne_bar):
-        βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
-        return βVeff
 
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
@@ -68,7 +70,7 @@ class TFStarret2014_core(AverageAtom):
         self.aa_type = "CS2014"
         self.name=""
 
-    def update_bulk_params(self):    
+    def update_bulk_params(self, iters):    
         # self.update_newton_Zstar()          # get Zstar from bound/free
         # if n%10==0 or n<5 and not μ_converged:
         self.set_μ_neutral()
@@ -82,10 +84,6 @@ class TFStarret2014_core(AverageAtom):
         ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
         return ne_guess
 
-    def get_βVeff(self, φe, ne, ne_bar):
-        βVeff = ( -φe - self.φion + self.vxc_f(ne) - self.vxc_f(ne_bar) )/self.Te
-        return βVeff
-
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
         model_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
@@ -95,7 +93,6 @@ class TFStarret2014_core(AverageAtom):
         self.make_bound_free()
         self.ne_bar = self.ne[-1] # a CS specific idea
         self.Zstar = self.ne_bar/self.ni_bar
-
 
 class TFStarret2014(AverageAtom):
     """
@@ -107,17 +104,17 @@ class TFStarret2014(AverageAtom):
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "CS2014"
         self.kwargs = kwargs
+        self.setup_core_atom()
 
     def setup_core_atom(self):
         self.core_atom = TFStarret2014_core(self.Z, self.A, self.Ti, self.Te, self.rs, **self.kwargs)
 
     def setup_empty_atom(self):
-        self.empty_atom = TFStarret2014_EmptyAtom(self.Z, self.A, self.Ti, self.Te, self.rs, self.R, self.core_atom.Zstar, **self.kwargs)
+        self.empty_atom = TFStarret2014_EmptyAtom(self.Z, self.A, self.Ti, self.Te, self.rs, self.R, self.core_atom.Zstar, self.core_atom.μ, **self.kwargs)
 
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
-        print("Setting up and solving core.")
-        self.setup_core_atom()
+        print("Solving core.")
         self.core_atom.solve(**kwargs)
         print("Settin up and solving empty atom")
         self.setup_empty_atom()
@@ -138,7 +135,13 @@ class TFStarret2014(AverageAtom):
         self.ρi = self.empty_atom.ρi
         self.Zstar = self.grid.integrate_f(self.ne_scr)
         print(f"Check combination is neutral: {self.Z} = {self.grid.integrate_f(self.ne_PA):0.3e}")
-         
+    
+    def make_Uei_iet(self):
+        self.ne_scr_r  = interp1d(self.grid.xs, self.ne_scr , bounds_error=False, fill_value='extrapolate')(self.iet.r_array*self.rs)        
+        self.ne_scr_k  = self.rs**3 * self.iet.FT_r_2_k(self.ne_scr_r)
+        self.Uei_iet_k = self.ne_scr_k/self.χee_iet
+        self.Uei_iet   = self.iet.FT_k_2_r(self.Uei_iet_k**self.rs**-3) 
+     
     ### Saving data
     def save_data(self):
         # Electron File
@@ -167,15 +170,70 @@ class TFStarret2014(AverageAtom):
         # self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
         # np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
-class ThomasFermiModel(AverageAtom):
+class ZJ_ISModel(AverageAtom):
+    """
+    Ion sphere model with R=rs
+    """
+    def __init__(self, Z, A, Ti, Te, rs, R_extended, **kwargs):
+        super().__init__(Z, A, Ti, Te, rs, rs, **kwargs)
+        self.R_extended = R_extended
+        self.ignore_vxc = kwargs.get('ignore_vxc', True)
+        self.aa_type = "TF"
+
+    def update_bulk_params(self, iters):    
+        if iters >= 50:
+            old_ne_bar = self.ne_bar
+            if iters%25==0:
+                self.update_newton_Zstar()
+            self.ne   += self.ne_bar - old_ne_bar
+        if iters%10==0:
+            self.set_μ_neutral()
+        else:
+            self.update_μ_newton(alpha1=1e-3)
+
+    def get_ne_guess(self):
+        ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+        return ne_guess
+
+    def solve(self, **kwargs):
+        # Thomas-Fermi specific solving logic
+        self.solve_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
+        self.solve_kwargs.update(kwargs)
+        self.solve_TF(**self.solve_kwargs)
+        self.set_physical_params()
+        self.make_bound_free()
+
+class ZJ_CSModel(AverageAtom): 
+    """
+    Correlation sphere model with R>>rs
+    """
+
     def __init__(self, Z, A, Ti, Te, rs, R, **kwargs):
         super().__init__(Z, A, Ti, Te, rs, R, **kwargs)
         self.ignore_vxc = kwargs.get('ignore_vxc', True)
         self.aa_type = "TF"
 
+    def update_bulk_params(self, iters):    
+        if iters > 50:
+            old_ne_bar = self.ne_bar
+            self.update_newton_Zstar()
+            self.ne   += self.ne_bar - old_ne_bar
+        self.update_ρi_and_Zstar_to_make_neutral()
+        self.set_μ_infinite()
+        self.set_μ_neutral()
+
+    def get_ne_guess(self):
+        ne_guess = self.get_ne_TF(self.φe, self.ne, self.μ, self.ne_bar)
+        return ne_guess
+
     def solve(self, **kwargs):
         # Thomas-Fermi specific solving logic
-        self.solve_TF(**kwargs)
+        self.solve_kwargs = {'picard_alpha':0.5, 'tol':1e-10}
+        self.solve_kwargs.update(kwargs)
+        self.solve_TF(**self.solve_kwargs)
+        self.set_physical_params()
+        self.make_bound_free()
+
 
 class TFW_Model(AverageAtom):
     def __init__(self, Z, A, Ti, Te, rs, R, Weizsacker_λ = 1/5, **kwargs):

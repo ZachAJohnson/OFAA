@@ -24,7 +24,7 @@ def compare_aa(aa_list, axs=None, name='', make_petrov_comparison = True):
             rs = aa.rs
             factor = 4*np.pi*aa.grid.xs**2
             if make_petrov_comparison:
-                ax.plot(np.array(petrov['r/R'])*rs, 4*π*(np.array(petrov['r/R'])*rs)**2*(petrov['ne']/m_to_AU**3), 'k--', label="Petrov AA")
+                ax.plot(np.array(petrov['r/R'])*aa.rs, 4*π*(np.array(petrov['r/R'])*aa.rs)**2*(petrov['ne']/m_to_AU**3), 'k--', label="Petrov AA")
             ax.plot(aa.grid.xs, aa.ne*factor ,'-',color=color, label=r'$n_e$: '+ name)
             ax.plot(aa.grid.xs, aa.nb*factor,'--',color=color,  label=r'$n_b$: ' + name)
             ax.plot(aa.grid.xs, aa.nf*factor,':',color=color,  label=r'$n_f$: ' + name)
@@ -122,13 +122,13 @@ def plot_convergence(aa, axs=None):
     for i, (φe, ne, μ, ne_bar) in enumerate(zip(aa.φe_list[::slice_by_num], aa.ne_list[::slice_by_num], aa.μ_list[::slice_by_num],aa.ne_bar_list[::slice_by_num])):
         ne_TF = aa.get_ne_TF(φe, ne, μ, ne_bar)
         if i ==0 or i==len(aa.ne_list[::slice_by_num])-1:
-            # ax.plot(aa.grid.xs, ne - ne_TF,linewidth=1,color=colors[i],alpha=1, label=r'$n_e/n_e^{{TF}}-1$, iter: {0}'.format(i))
-            # ax.plot(aa.grid.xs, ne_TF-ne_TF[-1],linewidth=1,color=colors[i],alpha=1, label=r'$n_e^{{TF}} - n_e^{{TF}}[-1]$, iter: {0}'.format(i*slice_by_num))
+            ax.plot(aa.grid.xs, ne - ne_TF,linewidth=1,color=colors[i],alpha=1, label=r'$n_e-n_e^{{TF}}$, iter: {0}'.format(i))
+            ax.plot(aa.grid.xs, ne_TF-0*ne_TF[-1],linewidth=1,color=colors[i],linestyle=':',alpha=1, label=r'$n_e^{{TF}} - n_e^{{TF}}[-1]$, iter: {0}'.format(i*slice_by_num))
             ax.plot(aa.grid.xs, ne-0*ne[-1],linewidth=1,color=colors[i],linestyle='--',alpha=1, label=r'$n_e - n_e[-1]$, iter: {0}'.format(i))
             # pass
         else:
-            # ax.plot(aa.grid.xs, ne - ne_TF, linewidth=1,linestyle='-',color=colors[i],alpha=0.5)
-            # ax.plot(aa.grid.xs, ne_TF-ne_TF[-1],linewidth=1,color=colors[i],alpha=1)
+            ax.plot(aa.grid.xs, ne - ne_TF, linewidth=1,linestyle='-',color=colors[i],alpha=0.5)
+            ax.plot(aa.grid.xs, ne_TF-0*ne_TF[-1],linewidth=1,linestyle=':',color=colors[i],alpha=1)
             ax.plot(aa.grid.xs, ne-0*ne[-1], linewidth=1,linestyle='--',color=colors[i],alpha=0.5)
             
 
@@ -144,5 +144,112 @@ def plot_convergence(aa, axs=None):
         ax.legend(fontsize=14)
         ax.tick_params(labelsize=14)
         ax.plot(aa.grid.xs, np.zeros_like(aa.ne),'k', alpha=0.2)
+        ax.set_xlim(0,1.5)
     plt.tight_layout()
+    return fig, axs
     
+def plot_Uei(aa_list, axs=None, name='', make_petrov_comparison = True):
+    # eV = 0.0367512 # So 4 eV = 4 * 0.036.. in natural units
+    if axs is None:
+        fig, axs = plt.subplots(1,2, figsize=(10,4))
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    for aa, color in zip(aa_list, colors):
+        axs[0].plot(aa.iet.k_array/aa.rs, aa.Uei_iet_k*(aa.iet.k_array/aa.rs)**2/(4*π) ,'--.',color=color, label=aa.aa_type ) # Need to muultiply by some rs power???
+        axs[0].plot(aa.iet.k_array/aa.rs, -aa.Zstar*np.ones_like(aa.iet.k_array),':', color=color, label=f"Coulomb, Z={aa.Zstar:0.3f}")
+
+    # axs[0].set_yscale('log')
+    axs[0].set_xscale('log')
+    axs[0].set_xlabel(r"$k$ [au]")
+    axs[0].set_ylabel(r"$U_{ei}$ [au]")
+
+    for aa, color in zip(aa_list, colors):
+        axs[1].plot(aa.iet.k_array/aa.rs, aa.uii_k_eff_iet,'-', color=color, label=aa.aa_type)
+        axs[1].plot(aa.iet.k_array/aa.rs, 4*π*aa.Zstar**2/(aa.iet.k_array/aa.rs)**2,'--', color=color, label=r"{0}: $u_{{ii}}^0$, Z={1:0.3f}".format(aa.aa_type, aa.Zstar))
+        axs[1].plot(aa.iet.k_array/aa.rs, 1/(aa.iet.k_array**2/aa.rs**2/(4*π*aa.Zstar**2) + 1/aa.uii_k_eff_iet[0] ),'--', color=color, label=r"{0}: $u_{{ii}}^0$, Z={1:0.3f}".format(aa.aa_type, aa.Zstar))
+
+
+    axs[1].set_yscale('symlog',linthresh=1e-4)
+    axs[1].set_ylim(0,1e5)
+    axs[1].set_xscale('log')
+    axs[1].set_xlabel(r"$k$ [au]")
+    axs[1].set_ylabel(r"$u^{\rm eff}_{ii}$ [au]")
+
+
+    for ax in axs:
+        ax.legend(fontsize=12)
+        ax.grid(alpha=0.3, which='both')
+    plt.tight_layout()
+
+    return fig, axs
+
+def plot_Uii(aa_list, axs=None, name='', make_petrov_comparison = True):
+    # eV = 0.0367512 # So 4 eV = 4 * 0.036.. in natural units
+    if axs is None:
+        fig, axs = plt.subplots(1,2, figsize=(10,4))
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    for aa, color in zip(aa_list, colors):
+        axs[0].plot(aa.iet.r_array*aa.rs, aa.Zstar/(aa.iet.r_array*aa.rs)+0*aa.Zstar/aa.R, color=color, label=f"Coulomb, Z={aa.Zstar:0.3f}")
+        axs[0].plot(aa.iet.r_array*aa.rs, np.abs(aa.Uei_iet) + 0*aa.Zstar/aa.R ,':',color=color, label=aa.aa_type ) # Need to muultiply by some rs power???
+        
+    axs[0].axvline(aa.rs, color='k')
+    
+    axs[0].set_yscale('log')#,linthresh=1e-1)
+    axs[0].set_xscale('log')
+    axs[0].set_xlabel(r"$r$ [au]")
+    axs[0].set_ylabel(r"$|U_{ei}|$ [au]")
+
+    for aa, color in zip(aa_list, colors):
+        axs[1].plot(aa.iet.r_array*aa.rs, 1/aa.Te * aa.uii_r_eff_iet, color=color,linestyle='-', label=aa.aa_type)
+        axs[1].plot(aa.iet.r_array*aa.rs, 1/aa.Te *aa.Zstar**2/(aa.iet.r_array*aa.rs ), color=color ,linestyle='--', label=f'Coulomb Z={aa.Zstar:0.3f}')
+        
+
+    axs[1].set_yscale('symlog',linthresh=1e-4)
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel(r"$\beta U_{ii}$ [au]")
+    axs[1].set_xlabel(r"$r$ [au]")
+    axs[1].set_xlim(1,None)
+
+
+    for ax in axs:
+        ax.legend(fontsize=10)
+        ax.grid(alpha=0.3, which='both')
+    plt.tight_layout()
+    return fig, axs
+
+
+def plot_hii(aa_list, axs=None, name='', make_petrov_comparison = True):
+    # eV = 0.0367512 # So 4 eV = 4 * 0.036.. in natural units
+    if axs is None:
+            fig, axs  = plt.subplots(1,2, figsize=(8,4))
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    plusone_list = [1, 0]
+    for ax, plusone in zip(axs, plusone_list):
+        for aa, color in zip(aa_list, colors):    
+            ax.plot(aa.iet.r_array, aa.iet.h_r_matrix[0,0] + plusone, label=r"{0}: $u_{{ii}}^{{\rm eff}}$".format(aa.aa_type),linewidth=1, zorder=5)
+
+    ax = axs[0]
+    ax.set_xlabel(r"$r/r_i$")
+    ax.set_ylabel("g(r)")
+    ax.set_xlim(0.7,2.5)
+    ax.set_ylim(0,2.5)
+    ax.legend(fontsize=10)
+
+    ax = axs[1]
+    ax.set_xlabel(r"$r/r_i$")
+    ax.set_ylabel("h(r)")
+    ax.set_xlim(0.7,10)
+    ax.set_ylim(0,2.5)
+    ax.set_yscale('symlog', linthresh=1e-4)
+
+    ax.legend(fontsize=8, loc='upper right')
+    
+    for ax in axs:
+        ax.grid(alpha=0.3, which='both')
+    plt.tight_layout()
+    return fig, axs
