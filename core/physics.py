@@ -251,13 +251,20 @@ class FermiDirac():
 
 
 class ThomasFermi():
-	def __init__(self, T, ignore_vxc = False):
+	def __init__(self, T, ignore_vxc = False, xc_type='KSDT'):
 		self.T = T
 		self.η_interp = self.make_η()
 		self.η_interp = np.vectorize(self.η_interp)
 
 		if ignore_vxc == False:
-			self.vxc_func = self.fast_vxc()
+			if xc_type=='KSDT':
+				self.vxc_func = self.fast_vxc()
+			elif xc_type=='simple':
+				self.vxc_func = np.vectorize(self.simple_vxc)
+		else:
+			self.vxc_func = lambda rho: 0
+			self.vxc_func = np.vectorize(self.vxc_func)
+
 		self.hλ_func = self.fast_hλ()
 		
 		self.hλprime_func = lambda η: (self.hλ_func(η*(1+1e-5))-self.hλ_func(η*(1-1e-5)))/(2*1e-5)
@@ -299,6 +306,7 @@ class ThomasFermi():
 		return (ThomasFermi.n_TF(T, eta+eps)-ThomasFermi.n_TF(T, eta-eps))/(2*eps)
 
 	def make_η(self):
+		print("T: ", self.T)
 		ηs = np.sort(np.concatenate([np.geomspace(1e-4,1e5,num=1000),-np.geomspace(1e-4,10**(2.5),num=1000)]))
 		ρs = self.n_TF(self.T, ηs)
 		η_logged = interp1d(np.log(ρs), ηs, kind='linear')#, bounds_error=None, fill_value = [])
@@ -356,7 +364,6 @@ class ThomasFermi():
 		"""
 		libxc_func  = pylibxc.LibXCFunctional("LDA_XC_KSDT",'unpolarized')
 		dfdrho  = lambda rho: libxc_func.compute({'rho':rho})['zk'][0,0]
-		# vdfdrho = np.vectorize(dfdrho)
 		return dfdrho(rho)
 
 	def Vxc_density_prime(self,rho,*args):
@@ -365,21 +372,10 @@ class ThomasFermi():
 	    this function returns  
 	        delta Vxc/delta n = vxc + n d(vxc)/dn
 	    """
-	    libxc_func  = pylibxc.LibXCFunctional("LDA_XC_GDSMFB",'unpolarized')
+	    libxc_func  = pylibxc.LibXCFunctional("LDA_XC_KSDT",'unpolarized')
 	    dfdrho  = lambda rho: libxc_func.compute({'rho':rho})['vrho'][0,0]
-	    # vdfdrho = np.vectorize(dfdrho)
 	    return dfdrho(rho)
-	    
-	# def Vxc_density_prime(self,rho,*args):
-	# 	"""
-	# 	Full functional derivative of Vxc, delta Vxc/delta n, or if Vxc = integral(vxc), then 
-	# 	this function returns  
-	# 	    delta^2 Vxc/delta n delta n = vxc + n d(vxc)/dn
-	# 	"""
-	# 	libxc_func  = pylibxc.LibXCFunctional("LDA_XC_GDSMFB",'unpolarized')
-	# 	d2fdrho2  = lambda rho: libxc_func.compute({'rho':rho})['v2rho2'][0,0]
-	# 	# vdfdrho = np.vectorize(dfdrho)
-	# 	return d2fdrho2(rho)
+	 
 
 	def fast_vxc(self):
 	    rhoe = np.geomspace(1e-5,1e8,num=10000)

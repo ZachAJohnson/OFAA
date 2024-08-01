@@ -28,48 +28,6 @@ import json
 
 import pandas as pd
 
-# def load_NPA( fname, TFW=True, ignore_vxc=False):
-# 	#e.g. fname="/home/zach/plasma/atomic_forces/average_atom/data/NPA_Aluminum_TFD_R9.0e+00_rs3.0e+00_T3.7e-02eV_Zstar3.0.dat"
-# 	with open(fname) as f:
-# 	    line = f.readlines()[1]
-# 	info_dict = json.loads(line.strip("\n"))
-# 	name  = info_dict['name']
-# 	μ     = info_dict['μ[AU]']
-# 	Z     = info_dict['Z']
-# 	A     = info_dict['A']
-# 	Zstar = info_dict['Zstar']
-# 	T     = info_dict['T[AU]']
-# 	rs    = info_dict['rs[AU]']
-
-
-# 	data = pd.read_csv(fname, delim_whitespace=True, header=1, comment='#')
-# 	ne   = data['n[AU]']
-# 	n_f  = data['nf[AU]']
-# 	n_b  = data['nb[AU]']
-# 	ni   = data['n_ion[AU]']
-# 	φe   = data['(φ_e+φ_ions)[AU]']
-# 	φion = data['φtotal[AU]']-φe
-
-# 	xs = data['r[AU]']
-# 	R  = np.array(xs)[-1]
-# 	N  = len(xs)
-
-# 	NPA = NeutralPseudoAtom(Z, A, T, rs, R, name=name, initialize=False, TFW=TFW, Npoints=N, ignore_vxc=ignore_vxc)
-# 	NPA.μ    = float(μ)
-# 	NPA.ne   = np.array(ne)
-# 	NPA.n_b  = np.array(n_b)
-# 	NPA.n_f  = np.array(n_f)
-# 	NPA.φe   = np.array(φe)
-# 	NPA.φion = np.array(φion)
-# 	NPA.Zstar= float(Zstar)
-
-# 	NPA.set_physical_params()
-
-# 	NPA.ni   = np.array(ni)
-# 	NPA.gii  = NPA.ni / NPA.ni_bar
-# 	NPA.make_ρi()
-
-# 	return NPA
 
 class Atom():
 	"""
@@ -85,8 +43,8 @@ class AverageAtom(Atom):
 	A NeutralPseudoAtom class
 	"""
 	def __init__(self, Z, A, Ti, Te, rs, R, initialize=True, μ_init = None, Zstar_init = 'More', 
-		rmin=2e-2, Npoints=500, iet_R_over_rs = None, iet_N_bins = 2000, name='', ignore_vxc=False, fixed_Zstar = False, use_full_ne_for_nf=False,
-		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2):
+		rmin=2e-2, Npoints=500, iet_R_over_rs = None, iet_N_bins = 2000, name='', ignore_vxc=False, xc_type='KSDT', fixed_Zstar = False, use_full_ne_for_nf=False,
+		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2, savefolder = os.path.join(PACKAGE_DIR,"data")):
 		super().__init__(Z, A, name=name)
 		"""
 		Generates an average atom (rs=R) or neutral pseudo atom (R>>r).
@@ -112,14 +70,18 @@ class AverageAtom(Atom):
 		self.Vol   = 4/3*π*self.R**3
 		self.gii_init_type = gii_init_type 
 		# Whether to include xc, mainly because libxc is an absolute pain
-		self.TF = ThomasFermi(self.Te, ignore_vxc = ignore_vxc )
+		
+		self.TF = ThomasFermi(self.Te, ignore_vxc = ignore_vxc, xc_type=xc_type )
 		self.ignore_vxc = ignore_vxc
-		if ignore_vxc == False:
-			self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
-			self.vxc_f = np.vectorize(self.vxc_f)
-		else:
-			self.vxc_f = lambda rho: 0
-			self.vxc_f = np.vectorize(self.vxc_f)
+		self.xc_type   = xc_type 
+		self.vxc_f = self.TF.vxc_func
+		# if ignore_vxc == False:
+		# 	# self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
+		# 	self.vxc_f = lambda rho: self.TF.vxc_func(rho)
+		# 	self.vxc_f = np.vectorize(self.vxc_f)
+		# else:
+		# 	self.vxc_f = lambda rho: 0
+		# 	self.vxc_f = np.vectorize(self.vxc_f)
 		self.μ_init = μ_init
 		
 		if Zstar_init =='More':
@@ -147,6 +109,19 @@ class AverageAtom(Atom):
 			self.reinitialize()
 			print("Initialized")
 			self.gii_initial = self.gii.copy()
+
+		self.savefolder = savefolder
+
+	@property
+	def savefolder(self):
+		return self._savefolder
+	
+	@savefolder.setter
+	def savefolder(self, folder):
+		if not os.path.exists(folder):
+			os.makedirs(folder)
+		self._savefolder = folder
+
 
 	def make_fast_n_TF(self):
 		# IMPLEMENT: check if file exists, if not create it	
@@ -200,7 +175,7 @@ class AverageAtom(Atom):
 		data = np.array([self.grid.xs, self.ne, self.nf, self.nb, self.ni, self.φe + self.φion, self.vxc_f(self.ne), self.Uei, self.uii_eff, self.gii_from_iet] ).T
 		
 		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_electron_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
-		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+		self.savefile = os.path.join(self.savefolder,txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
 		# Ion file
@@ -212,7 +187,7 @@ class AverageAtom(Atom):
 		data = np.array([self.iet.r_array*self.rs, self.Uei_iet, self.iet.βu_r_matrix[0,0]*self.Ti , self.iet.h_r_matrix[0,0]+1 ] ).T
 		
 		txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_IET_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
-		self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+		self.savefile = os.path.join(self.savefolder,txt)
 		np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
 	def set_physical_params(self):

@@ -7,7 +7,7 @@ from .config import CORE_DIR, PACKAGE_DIR
 from .average_atom_new import AverageAtom
 from hnc.hnc.constants import *
 
-
+from average_atom.core.physics import  FermiDirac
 
 # Prebuilt Average Atom Models
 class AverageAtomFactory:
@@ -120,6 +120,8 @@ class TFStarret2014(AverageAtom):
         self.setup_empty_atom()
         self.empty_atom.solve(**kwargs)
         self.combine_models()
+        self.make_iet()
+        self.set_uii_eff()
         self.save_data()
 
     def combine_models(self):
@@ -145,30 +147,30 @@ class TFStarret2014(AverageAtom):
     ### Saving data
     def save_data(self):
         # Electron File
-        err_info = " " #f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
-        aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ_core[AU]": {4:.10e}, "μ_empty[AU]": {5:.10e}, "Te[AU]": {6:.3e}, "Ti[AU]": {7:.3e}, "rs[AU]": {8:.3e} }}\n'.format("CS2014_" + self.name, self.Z, self.Zstar, self.A, self.core_atom.μ, self.empty_atom.μ, self.Te,self.Ti, self.rs)
+        err_info = f"# Convergence: Err(φ)={self.core_atom.poisson_err:.3e}, Err(n_e)={self.core_atom.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.core_atom.Q:.3e}\n"
+        aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format("CS2014_" + self.name, self.Z, self.Zstar, self.A, self.core_atom.μ, self.Te,self.Ti, self.rs)
         column_names = f"   {'r[AU]':15} {'ne_full[AU]':15} {'n_ion[AU]':15} {'ne_ext[AU]':15} {'ne_PA[AU]':15} {'ne_scr[AU]':15} "
-        header = ("Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
+        header = ("# Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
         #           "# All units in Hartree [AU] if not specified\n"+
                 err_info + aa_info + column_names)   
         data = np.array([self.grid.xs, self.ne_full, self.n_ion, self.ne_ext, self.ne_PA, self.ne_scr] ).T
         
         txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_electron_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
-        self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
+        self.savefile   = os.path.join(self.savefolder,txt)
         np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
-        # # Ion file
-        # err_info = f"# Convergence: Err(φ)={self.poisson_err:.3e}, Err(n_e)={self.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.Q:.3e}\n"
-        # aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.μ, self.Te, self.Ti, self.rs)
-        # column_names = f"   {'r[AU]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
-        # header = ("Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
-        #           "# All units in Hartree [AU] if not specified\n"+
-        #             err_info + aa_info + column_names)   
-        # data = np.array([self.iet.r_array*self.rs, self.Uei_iet, self.iet.βu_r_matrix[0,0]*self.Ti , self.iet.h_r_matrix[0,0]+1 ] ).T
+        # Ion file
+        err_info = f"# Convergence: Err(φ)={self.core_atom.poisson_err:.3e}, Err(n_e)={self.core_atom.rho_err:.3e}, Err(IET)={self.iet.final_Picard_err:.3e}, Q_net={self.core_atom.Q:.3e}\n"
+        aa_info = '# {{"name":"{0}", "Z":{1}, "Zstar":{2}, "A":{3},  "μ[AU]": {4:.10e}, "Te[AU]": {5:.3e}, "Ti[AU]": {6:.3e}, "rs[AU]": {7:.3e} }}\n'.format(self.name, self.Z, self.Zstar, self.A, self.core_atom.μ, self.Te, self.Ti, self.rs)
+        column_names = f"   {'r[AU]':15} {'U_ei[AU]':15} {'U_ii[AU]':15} {'g_ii':15} "
+        header = ("# Model replicates Starrett & Saumon 2014 'A simple method for determining the ionic structure of warm dense matter'\n" + 
+                  "# All units in Hartree [AU] if not specified\n"+
+                    err_info + aa_info + column_names)   
+        data = np.array([self.iet.r_array*self.rs, self.Uei_iet, self.iet.βu_r_matrix[0,0]*self.Ti , self.iet.h_r_matrix[0,0]+1 ] ).T
         
-        # txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_IET_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
-        # self.savefile = os.path.join(PACKAGE_DIR,"data",txt)
-        # np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
+        txt='{0}_{1}_R{2:.1e}_rs{3:.1e}_Te{4:.1e}eV_Ti{5:.1e}eV_IET_info.dat'.format(self.name, self.aa_type, self.R, self.rs, self.Te*AU_to_eV, self.Ti*AU_to_eV, self.Zstar)
+        self.savefile = os.path.join(self.savefolder,txt)
+        np.savetxt(self.savefile, data, delimiter = ' ', header=header, fmt='%15.6e', comments='')
 
 class ZJ_ISModel(AverageAtom):
     """
@@ -202,6 +204,41 @@ class ZJ_ISModel(AverageAtom):
         self.solve_TF(**self.solve_kwargs)
         self.set_physical_params()
         self.make_bound_free()
+        self.set_uii_eff()
+
+    def get_E(self):
+        βVeff = self.get_βVeff(self.φe, self.ne, self.ne_bar)
+        η = self.μ/self.Te - βVeff
+        βU = self.grid.integrate_f(βVeff*self.ne)
+
+        φ_from_e_only = self.get_φe(-self.ne)[0] 
+        φ_from_i_only = self.get_φe(self.ρi)[0] + self.φion 
+        U = -self.grid.integrate_f(self.ne * (0.5*φ_from_e_only + φ_from_i_only))
+
+        I_onehalf = FermiDirac.Ionehalf(η)
+        I_threehalf = FermiDirac.Ithreehalf(η)
+
+        K = (2*self.Te)**1.5/(2*π**2) * self.Te * self.grid.integrate_f( I_threehalf)
+        self.Ke = K
+        self.Ue = U
+        self.Ee = U+K
+        return U, K, (U + K)
+
+    def get_P(self):
+        self.Pe = (2*self.Te)**2.5/(6*π**2) * FermiDirac.Ithreehalf(self.μ/self.Te)
+        return self.Pe
+
+    def print_EOS(self):
+        Ee_pot, Ee_K, Ee = self.get_E()
+        P_e =  self.get_P()
+        print(f"Ee_pot_density = {Ee_pot*self.ni_bar:0.3e} [au], Ee_K = {Ee_K*self.ni_bar:0.3e} [au], Ee_tot = {Ee*self.ni_bar:0.3e} [au]")
+        print(f"P_e = {P_e:0.3e} [au], {P_e*AU_to_bar/1e6:0.3e} [Mbar]")
+        print(f"Virial if {Ee_K:0.3e} = {3/2*P_e*self.Vol - 0.5*Ee_pot:0.3e} --->  off by {100*Ee_K/(3/2*P_e*self.Vol - 0.5*Ee_pot) - 100:0.3e} % ")
+
+        print(f"\nβEe_pot/Z = {Ee_pot/self.Te/self.Z:0.3f}, βEe_K/Z = {Ee_K/self.Te/self.Z:0.3f}, βEe_tot/Z = {Ee/self.Te/self.Z:0.3f}")
+        print(f"βP_e Ω/Z = {P_e*self.Vol/self.Te/self.Z:0.3f}")
+        # print(f"Virial if {Ee_K:0.3e} = {3/2*P_e*self.Vol - 0.5*Ee_pot:0.3e}")
+
 
 class ZJ_CSModel(AverageAtom): 
     """
@@ -233,6 +270,7 @@ class ZJ_CSModel(AverageAtom):
         self.solve_TF(**self.solve_kwargs)
         self.set_physical_params()
         self.make_bound_free()
+        self.set_uii_eff()
 
 
 class TFW_Model(AverageAtom):
@@ -387,7 +425,6 @@ class TFW_Model(AverageAtom):
 
             b[-1]  = γ[-1]/x[-1]
             
-
             return A, b     
 
         A, b = banded_Ab()

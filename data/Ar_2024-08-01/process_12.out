@@ -1,0 +1,29 @@
+
+===========================================
+===========================================
+Starting case: Ar: Te = 0.045 eV, Ti = 0.045 eV 
+
+T[K]:  519.3989222160823
+________________________
+Generating NPA
+T:  0.0016448376813129205
+Using More TF fit for initial Zstar = 0.241
+	Intializing grid
+Initializing, True
+Initializing
+	Creating Integral Equation Solver
+/home/zach/plasma/average_atom/core/average_atom_new.py:259: RuntimeWarning: invalid value encountered in power
+  nb_Mavrin_Demura_func = lambda r: np.nan_to_num(self.Z/(4*π*r_TF**3) * (Φ_Mavrin_Demura(x(r))/x(r) )**1.5)
+Intialized Potentials and Densities
+Initialized
+Time to setup correlation sphere (IS) model: 4.075e-01 [s], time so far: 4.075e-01 [s]
+Beginning self-consistent electron solver.
+_________________________________
+__________________________________________
+TF Iteration 0
+	μ = 3.070154134e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.865e-11, φe change =  9.382e-01
+	ne Err =        nan, ne change =        nan
+	Q =  0.000e+00 ->        nan, 
+	Zstar guess =  2.410e-01. Current Zstar:  2.410e-01 (converged=True)
+	Change =        nan
