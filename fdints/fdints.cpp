@@ -32,18 +32,21 @@
   */
 
   double y;
-  if (eta<-30) {
+  if (eta<-50) {
     y = exp(eta);
   }
   else if (eta>1e8) { 
     y = 4*pow(eta,1.5)/(3*sqrt(M_PI));
   }
   else {
-    double epsilon = 1e-6;
-    if (eta> 1e-6) {
+    double epsilon = 1e-12;
+    if (eta> 1e-8) {
      epsilon = 1e-6*eta;
-    };
-    y= (fthreehalf(eta+epsilon)-fthreehalf(eta-epsilon))/(2*epsilon);
+    } 
+    else if (eta<-1e-8) {
+      epsilon = -1e-6*eta;
+    }
+    y = (fthreehalf(eta+epsilon)-fthreehalf(eta-epsilon))/(2*epsilon);
   }
 
   return y;
@@ -52,7 +55,7 @@
 double fminusonehalf ( double eta)
 {
   double y;
-  if (eta<-30) { 
+  if (eta<-50) { 
     y = exp(eta);
   }
   else if (eta>1e8){

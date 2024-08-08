@@ -30,3 +30,4 @@ Lastly, make shared object using python disutils
 Together:
 	swig -c++ -python fdints.i ; gcc -c -fpic fdints_wrap.cxx fdints.cpp -I/home/zach/.pyenv/versions/3.9.13/include/python3.9; python setup.py build_ext --inplace
 
+	swig -c++ -python fdints.i ; gcc -c -fpic fdints_wrap.cxx fdints.cpp -I/home/zach/anaconda3/envs/zplasma/include/python3.10; python setup.py build_ext --inplace

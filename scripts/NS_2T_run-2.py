@@ -38,6 +38,7 @@ def run_case(case_info):
       
 
       case, case_number = case_info
+
       # Redirect stdout to a file with a unique name
       log_file = open(os.path.join(savefolder,f'process_{case_number}.out'), 'w', buffering=1)
       sys.stdout = log_file
@@ -46,7 +47,7 @@ def run_case(case_info):
       print(f"\n===========================================\n===========================================")
       t00 = time()
       name, Z, A, Ti_AU, Te_AU, rs = case.name, case.Z, case.A, case.Ti, case.Te, case.rs
-      R = 10*rs
+      R = 20*rs
       print(f"Starting case: {case.name}: Te = {Te_AU*AU_to_eV:0.3f} eV, Ti = {Ti_AU*AU_to_eV:0.3f} eV \n")
 
 
@@ -83,24 +84,39 @@ def run_case(case_info):
       if run_ZJ_SS:
             t0 = time()
             aa_ZJ_SS  =  AverageAtomFactory.create_model("TFStarret2014", Z, A, Ti_AU, Te_AU, rs, R, 
-                  name=name, ignore_vxc=False, Npoints=2000, rmin=1e-4, N_stencil_oneside = 2, savefolder=savefolder, χ_type='TF')
+                  name=name, ignore_vxc=False, Npoints=2000, rmin=1e-3, N_stencil_oneside = 2, savefolder=savefolder, χ_type='TF')
             print(f"Time to setup correlation sphere (CS) model: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
             
             aa_ZJ_SS.savefolder = os.path.join(savefolder, f"chi_{aa_ZJ_SS.χ_type}")
 
             t0 = time()
-            aa_ZJ_SS.solve(picard_alpha=0.5,verbose=True)
+            aa_ZJ_SS.solve(picard_alpha=0.3,verbose=True)
+            print(f"Time to solve SS model: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
             aa_ZJ_SS.set_uii_eff()
-
-            print(f"Time to solve CS model: {time()-t0:0.3e} [s], time so far: {time()-t00:0.3e} [s]")
-       
             aa_ZJ_SS.save_data()
-            print("CS model saved.")
+            print("SS model saved.")
 
-            print("Changing Ion parameters")
+            print("\nChanging Ion parameters")
             aa_ZJ_SS.χ_type='Lindhard'
             aa_ZJ_SS.make_χee()
-            aa_ZJ_SS.savefolder = os.path.join(savefolder, f"chi_{aa_ZJ_SS.χ_type}")
+            aa_ZJ_SS.savefolder = os.path.join(savefolder, f"chi_{aa_ZJ_SS.χ_type}_LFC={aa_ZJ_SS.χ_LFC}_finite_T={aa_ZJ_SS.χ_finite_T}")
+            aa_ZJ_SS.set_uii_eff()
+            aa_ZJ_SS.save_data()
+            
+            print("\nChanging Ion parameters")
+            aa_ZJ_SS.χ_type='Lindhard'
+            aa_ZJ_SS.χ_LFC=False
+            aa_ZJ_SS.make_χee()
+            aa_ZJ_SS.savefolder = os.path.join(savefolder, f"chi_{aa_ZJ_SS.χ_type}_LFC={aa_ZJ_SS.χ_LFC}_finite_T={aa_ZJ_SS.χ_finite_T}")
+            aa_ZJ_SS.set_uii_eff()
+            aa_ZJ_SS.save_data()
+
+            print("\nChanging Ion parameters")
+            aa_ZJ_SS.χ_type='Lindhard'
+            aa_ZJ_SS.χ_LFC=False
+            aa_ZJ_SS.χ_finite_T=False
+            aa_ZJ_SS.make_χee()
+            aa_ZJ_SS.savefolder = os.path.join(savefolder, f"chi_{aa_ZJ_SS.χ_type}_LFC={aa_ZJ_SS.χ_LFC}_finite_T={aa_ZJ_SS.χ_finite_T}")
             aa_ZJ_SS.set_uii_eff()
             aa_ZJ_SS.save_data()
 
@@ -119,8 +135,11 @@ T_ie_list = np.array([
       [30,30],
       ])*eV_to_AU
 
-
 savefolder = os.path.join(PACKAGE_DIR,"data",f"Al_2T_{datetime.today().strftime('%Y-%m-%d')}")
+# Redirect stdout to a file with a unique name
+if not os.path.exists(savefolder):
+      os.makedirs(savefolder)
+
 name='Al'
 Z, A = 13, 26.981539
 ρ_gpercc = 2.7

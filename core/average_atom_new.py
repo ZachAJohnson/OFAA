@@ -44,7 +44,7 @@ class AverageAtom(Atom):
 	"""
 	def __init__(self, Z, A, Ti, Te, rs, R, initialize=True, μ_init = None, Zstar_init = 'More', 
 		rmin=2e-2, Npoints=500, iet_R_over_rs = None, iet_N_bins = 2000, name='', ignore_vxc=False, xc_type='KSDT', fixed_Zstar = False, use_full_ne_for_nf=False,
-		χ_type = 'Lindhard', gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2, savefolder = os.path.join(PACKAGE_DIR,"data")):
+		χ_type = 'Lindhard', χ_LFC=True, χ_finite_T=True,  gii_init_type = 'step', grid_spacing='quadratic', N_stencil_oneside = 2, savefolder = os.path.join(PACKAGE_DIR,"data")):
 		super().__init__(Z, A, name=name)
 		"""
 		Generates an average atom (rs=R) or neutral pseudo atom (R>>r).
@@ -69,19 +69,13 @@ class AverageAtom(Atom):
 		self.WSvol = 4/3*π*self.rs**3
 		self.Vol   = 4/3*π*self.R**3
 		self.gii_init_type = gii_init_type 
-		# Whether to include xc, mainly because libxc is an absolute pain
-		
+
+		# Exchange-Correlation handling
 		self.TF = ThomasFermi(self.Te, ignore_vxc = ignore_vxc, xc_type=xc_type )
 		self.ignore_vxc = ignore_vxc
 		self.xc_type   = xc_type 
 		self.vxc_f = self.TF.vxc_func
-		# if ignore_vxc == False:
-		# 	# self.vxc_f = lambda rho: self.TF.simple_vxc(rho)
-		# 	self.vxc_f = lambda rho: self.TF.vxc_func(rho)
-		# 	self.vxc_f = np.vectorize(self.vxc_f)
-		# else:
-		# 	self.vxc_f = lambda rho: 0
-		# 	self.vxc_f = np.vectorize(self.vxc_f)
+
 		self.μ_init = μ_init
 		
 		if Zstar_init =='More':
@@ -93,6 +87,8 @@ class AverageAtom(Atom):
 		self.fixed_Zstar = fixed_Zstar # If True, use Zstar_init always, don't update
 		self.use_full_ne_for_nf = use_full_ne_for_nf
 		self.χ_type = χ_type
+		self.χ_LFC = χ_LFC
+		self.χ_finite_T = χ_finite_T
 
 		# Instantiate 1-D grid and ThomasFermi
 		print("	Intializing grid")
@@ -124,12 +120,13 @@ class AverageAtom(Atom):
 
 
 	def make_fast_n_TF(self):
-		# IMPLEMENT: check if file exists, if not create it	
-		etas = np.sort(np.concatenate([np.geomspace(1e-4,1e8,num=10000),-np.geomspace(1e-4,10**(2.5),num=1000)]))
+		φion = self.Z/self.grid.xs - self.Z/self.grid.xmax # making sure handling this part. before initialization
+		max_η = np.max(1.2*φion/self.Te)
+		etas = np.sort(np.concatenate([np.geomspace(1e-8,max_η,num=10000),-np.geomspace(1e-8,10**(2.5),num=5000)]))
 		I12_values = FermiDirac.Ionehalf(etas)
 		Ionehalf = interp1d(etas, I12_values, kind='linear', bounds_error=False, fill_value=(0, None))
 		self.fast_n_TF = lambda eta: (np.sqrt(2)/np.pi**2)*self.Te**(3/2)*Ionehalf(eta)
-		# self.fast_n_TF = np.vectorize(fast_n_TF)
+		# self.fast_n_TF = lambda eta: (np.sqrt(2)/np.pi**2)*self.Te**(3/2)*FermiDirac.Ionehalf(eta)
 
 
 	def interp_to_grid(self, r_data, f_data):
@@ -138,24 +135,6 @@ class AverageAtom(Atom):
 		f = interp1d(logr_data, logf_data, bounds_error=False, fill_value = (logf_data[0], logf_data[-1]) )
 		new_logf_data = f(np.log(self.grid.xs))
 		return np.exp(new_logf_data) 
-
-
-	def new_grid(self, Npoints, xmin = None):
-		old_xs = self.grid.xs
-		if xmin==None:
-			xmin = self.grid.xmin
-
-		self.grid = NonUniformGrid(xmin, self.R, Npoints, self.rs)
-		self.φe = self.interp_to_grid(old_xs, self.φe)
-		self.φion = self.Z/self.grid.xs - self.Z/self.R#self.grid.xmax #1/r with zero at boundary 
-		self.ne = self.interp_to_grid(old_xs, self.ne)
-		self.nb = self.interp_to_grid(old_xs, self.nb)
-		self.nf = self.interp_to_grid(old_xs, self.nf)
-		self.gii = self.interp_to_grid(old_xs, self.gii)
-		self.ni = self.interp_to_grid(old_xs, self.ni)
-		self.ρi = self.interp_to_grid(old_xs, self.ρi)
-		self.rws_index = np.argmin(np.abs(self.grid.xs - self.rs))
-
 
 	def print_metric_units(self):
 		aBohr = 5.29177210903e-9 # cm
@@ -369,7 +348,7 @@ class AverageAtom(Atom):
 	def make_χee(self):
 
 		if self.χ_type == 'Lindhard':
-			self.χee_func = lambda k: χ_Lindhard(k, self.kF)
+			self.χee_func = lambda k: χ_Lindhard(self.μ, self.Te, k, self.kF, LFC=self.χ_LFC, finite_T=self.χ_finite_T)
 			self.χee_func = np.vectorize(self.χee_func)
 		if self.χ_type == 'TF':
 			self.χee_func = lambda k: χ_TF(k, self.kF)
@@ -415,7 +394,7 @@ class AverageAtom(Atom):
 		self.set_physical_params()
 		self.make_Uei_iet()
 		
-		u_k_Y_approx = 4*π*self.Zstar**2/(  (self.iet.k_array/self.rs)**2 + self.κ**2)
+		u_k_Y_approx = 4*π*self.Zstar**2/(  (self.iet.k_array/self.rs)**2 + (self.κ/self.rs)**2)
 		u_r_Y_approx = self.Zstar**2/(self.iet.r_array*self.rs)*np.exp(-self.κ*self.iet.r_array)
 
 		self.uii_k_eff_iet = 4*π*self.Zstar**2/(self.iet.k_array/self.rs)**2 + self.χee_iet*self.Uei_iet_k**2 - u_k_Y_approx
@@ -616,6 +595,12 @@ class AverageAtom(Atom):
 		
 		self.old_ne_guess = self.new_ne_guess.copy()
 
+	def get_Zstar_from_selfnb(self):
+		return self.Z - self.grid.integrate_f(self.nb)
+
+	def set_Zstar(self):
+		self.Zstar = self.get_Zstar_from_selfnb()
+
 	def update_newton_Zstar(self, alpha = 2e-1):
 		"""
 		Gets bound free separation using approximation  in ThomasFermi. 
@@ -626,7 +611,7 @@ class AverageAtom(Atom):
 		"""
 		self.make_bound_free()
 
-		self.new_Zstar_guess = self.Z - self.grid.integrate_f(self.nb)
+		self.new_Zstar_guess = self.get_Zstar_from_selfnb()
 
 		try:
 			new_Zstar = self.newton_update_from_guess(self.old_Zstar, self.Zstar, self.old_Zstar_guess, self.new_Zstar_guess)
@@ -837,7 +822,7 @@ class AverageAtom(Atom):
 		axs[0].plot(self.grid.xs , -self.φe, label=r"$-\phi_{e}$")
 		axs[0].plot(self.grid.xs , self.φe + self.φion, label=r"$\phi$")
 		# if not self.ignore_vxc:
-		# 	axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
+		axs[0].plot(self.grid.xs , -self.vxc_f(self.ne) , label=r"$-v_{xc}[n_e]$")
 		# if self.gradient_correction is not None:
 		# 	axs[0].plot(self.grid.xs , -self.get_gradient_energy(self.ne) , label=r"$-v_{W}[n_e]$")
 		axs[0].plot(self.grid.xs , -self.get_βVeff(self.φe, self.ne, self.ne_bar)*self.Te , label=r"$-V_{\rm eff}$")
@@ -867,7 +852,7 @@ class AverageAtom(Atom):
 			ax.set_xlim(self.grid.xs[0],self.grid.xs[-1])
 			ax.set_xscale('log')
 			ax.set_xlabel(r'$|r-R_1|$ [A.U.]',fontsize=20)
-			ax.legend(loc="upper right",fontsize=20,labelspacing = 0.1)
+			ax.legend(loc="center left",fontsize=20,labelspacing = 0.1)
 			ax.tick_params(labelsize=20)
 			ax.grid(which='both',alpha=0.4)
 

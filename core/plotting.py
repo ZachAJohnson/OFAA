@@ -28,6 +28,7 @@ def compare_aa(aa_list, axs=None, name='', make_petrov_comparison = True):
             ax.plot(aa.grid.xs, aa.ne*factor ,'-',color=color, label=r'$n_e$: '+ name)
             ax.plot(aa.grid.xs, aa.nb*factor,'--',color=color,  label=r'$n_b$: ' + name)
             ax.plot(aa.grid.xs, aa.nf*factor,':',color=color,  label=r'$n_f$: ' + name)
+            ax.plot(aa.grid.xs, aa.get_ne_TF(aa.φe, aa.ne, aa.μ, aa.ne_bar)*factor,':',color='r',  label=r'$n_{TF}$: ' + name)
             # ax.plot(aa.grid.xs, aa.δn_f*factor,'-',color='b',  label=r'$n^{scr} = n^{PA} - n^{ion}$: ' + name)
             # ax.plot(aa.grid.xs, (aa.δn_f+aa.nb)*factor,'--',color='b',  label=r'$n^{PA}=n-n^{empty}$: ' + name)
             # ax.plot(aa.grid.xs, (aa.ρi - aa.empty_ne )*factor,':',color='b',  label=r'$\rho^i - n^{empty}$: ' + name)
@@ -39,7 +40,7 @@ def compare_aa(aa_list, axs=None, name='', make_petrov_comparison = True):
 
     axs[0].set_ylabel(r'$4 \pi r^2 n_e(r) $ [A.U.]',fontsize=20)
     axs[0].set_ylim(-1e1, 1e3)
-    axs[0].set_yscale('symlog',linthresh=1e-1)
+    axs[0].set_yscale('symlog',linthresh=1e-5)
     axs[0].set_xscale('log')
     axs[0].set_xlim(aa.grid.xs[0],aa.grid.xs[-1])
 
@@ -50,7 +51,7 @@ def compare_aa(aa_list, axs=None, name='', make_petrov_comparison = True):
         
     for ax in axs:
         ax.set_xlabel(r'$|r-R_1|$ [A.U.]',fontsize=20)
-        ax.legend(loc="upper right",fontsize=20,labelspacing = 0.1)
+        ax.legend(loc="lower left",fontsize=20,labelspacing = 0.1)
         ax.tick_params(labelsize=20)
         ax.grid(which='both',alpha=0.4)
 
@@ -62,7 +63,8 @@ def compare_aa(aa_list, axs=None, name='', make_petrov_comparison = True):
                 r"$Z^\ast = $" + "{0}".format(np.round(aa.Zstar,2))  )
 
         props = dict(boxstyle='round', facecolor='w')
-        ax.text(0.25,0.95, text, fontsize=15, transform=ax.transAxes, verticalalignment='top', bbox=props)
+    axs[0].text(0.55,0.2, text, fontsize=15, transform=axs[0].transAxes, verticalalignment='top', bbox=props)
+    axs[1].text(0.55,0.95, text, fontsize=15, transform=axs[1].transAxes, verticalalignment='top', bbox=props)
 
     plt.tight_layout()
     name = "AA_densities_{0}_rs{1}_{2}eV_R{3}.png".format(aa.name, np.round(aa.rs,2), np.round(aa.Te/eV,2) ,np.round(aa.R))
@@ -116,20 +118,20 @@ def plot_convergence(aa, axs=None):
     # ax.plot(aa.grid.xs, (aa.gii)-1, 'k:')
     ax.set_yscale('symlog',linthresh=1e-4)
 
-            
+    factor = 4*np.pi*aa.grid.xs**2
     # number density
     ax = axs[2]
     for i, (φe, ne, μ, ne_bar) in enumerate(zip(aa.φe_list[::slice_by_num], aa.ne_list[::slice_by_num], aa.μ_list[::slice_by_num],aa.ne_bar_list[::slice_by_num])):
         ne_TF = aa.get_ne_TF(φe, ne, μ, ne_bar)
         if i ==0 or i==len(aa.ne_list[::slice_by_num])-1:
-            ax.plot(aa.grid.xs, ne - ne_TF,linewidth=1,color=colors[i],alpha=1, label=r'$n_e-n_e^{{TF}}$, iter: {0}'.format(i))
-            ax.plot(aa.grid.xs, ne_TF-0*ne_TF[-1],linewidth=1,color=colors[i],linestyle=':',alpha=1, label=r'$n_e^{{TF}} - n_e^{{TF}}[-1]$, iter: {0}'.format(i*slice_by_num))
-            ax.plot(aa.grid.xs, ne-0*ne[-1],linewidth=1,color=colors[i],linestyle='--',alpha=1, label=r'$n_e - n_e[-1]$, iter: {0}'.format(i))
+            # ax.plot(aa.grid.xs, factor*(ne - ne_TF) , linewidth=1,color=colors[i],alpha=1, label=r'$n_e-n_e^{{TF}}$, iter: {0}'.format(i))
+            ax.plot(aa.grid.xs, factor*(ne_TF-0*ne_TF[-1]) ,linewidth=1,color=colors[i],linestyle=':',alpha=1, label=r'$n_e^{{TF}}$, iter: {0}'.format(i*slice_by_num))
+            ax.plot(aa.grid.xs, factor*(ne-0*ne[-1]) ,linewidth=1,color=colors[i],linestyle='--',alpha=1, label=r'$n_e$, iter: {0}'.format(i))
             # pass
         else:
-            ax.plot(aa.grid.xs, ne - ne_TF, linewidth=1,linestyle='-',color=colors[i],alpha=0.5)
-            ax.plot(aa.grid.xs, ne_TF-0*ne_TF[-1],linewidth=1,linestyle=':',color=colors[i],alpha=1)
-            ax.plot(aa.grid.xs, ne-0*ne[-1], linewidth=1,linestyle='--',color=colors[i],alpha=0.5)
+            # ax.plot(aa.grid.xs, factor*(ne - ne_TF), linewidth=1,linestyle='-',color=colors[i],alpha=0.5)
+            ax.plot(aa.grid.xs, factor*(ne_TF-0*ne_TF[-1]),linewidth=1,linestyle=':',color=colors[i],alpha=1)
+            ax.plot(aa.grid.xs, factor*(ne-0*ne[-1]), linewidth=1,linestyle='--',color=colors[i],alpha=1)
             
 
             # print(np.abs(ne/ne_TF-1))
@@ -137,14 +139,14 @@ def plot_convergence(aa, axs=None):
             # print(aa.grid.xs[np.where( np.abs(ne/ne_TF-1) > 1e-8)][0]/10, 1/(np.sum(aa.grid.xs*np.abs(ne/ne_TF-1))/np.sum(np.abs(ne/ne_TF-1))))
     # ax.set_ylim()
     # ax.plot(aa.grid.xs, npa.get_ne_TF(npa.φe, npa.ne, npa.μ, npa.ne_bar) - npa.get_ne_TF(npa.φe, npa.ne, npa.μ, npa.ne_bar)[-1] , 'k:')
-    ax.plot(aa.grid.xs, aa.get_ne_TF(aa.φe, aa.ne_bar*np.ones_like(aa.ne), aa.μ, aa.ne_bar) - aa.get_ne_TF(aa.φe, aa.ne_bar*np.ones_like(aa.ne), aa.μ, aa.ne_bar)[-1] , 'k:')
-    ax.set_yscale('symlog',linthresh=1e-10)
-    # ax.set_xscale('log')
+    # ax.plot(aa.grid.xs, aa.get_ne_TF(aa.φe, aa.ne_bar*np.ones_like(aa.ne), aa.μ, aa.ne_bar) - aa.get_ne_TF(aa.φe, aa.ne_bar*np.ones_like(aa.ne), aa.μ, aa.ne_bar)[-1] , 'k:')
+    ax.set_yscale('symlog',linthresh=1e-1)
+    ax.set_xscale('log')
     for ax in axs:
         ax.legend(fontsize=14)
         ax.tick_params(labelsize=14)
         ax.plot(aa.grid.xs, np.zeros_like(aa.ne),'k', alpha=0.2)
-        ax.set_xlim(0,1.5)
+        # ax.set_xlim(1,5)
     plt.tight_layout()
     return fig, axs
     

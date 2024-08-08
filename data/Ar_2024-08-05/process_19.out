@@ -1,0 +1,679 @@
+
+===========================================
+===========================================
+Starting case: Ar: Te = 0.063 eV, Ti = 0.063 eV 
+
+T[K]:  729.7002377072956
+________________________
+Generating NPA
+T:  0.0023108219823079023
+Using More TF fit for initial Zstar = 0.257
+	Intializing grid
+Initializing, True
+Initializing
+	Creating Integral Equation Solver
+Intialized Potentials and Densities
+Initialized
+Time to setup correlation sphere (IS) model: 1.937e+00 [s], time so far: 1.937e+00 [s]
+Beginning self-consistent electron solver.
+_________________________________
+__________________________________________
+TF Iteration 0
+	μ = -1.251616604e+00, change: 4.917950611e+02 (converged=False)
+	φe Err =  3.706e-11, φe change =  9.418e-01
+	ne Err =  7.374e-02, ne change =  2.101e-04
+	Q =  0.000e+00 -> -1.807e+01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.932e+00
+__________________________________________
+TF Iteration 1
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.027e-11, φe change =  4.684e-02
+	ne Err =  1.464e-01, ne change =  1.573e-04
+	Q = -1.807e+01 -> -1.252e+01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.216e-02
+__________________________________________
+TF Iteration 2
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.980e-11, φe change =  1.293e-02
+	ne Err =  9.818e-02, ne change =  1.282e-04
+	Q = -1.252e+01 -> -8.298e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.341e-02
+__________________________________________
+TF Iteration 3
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.941e-11, φe change =  1.305e-02
+	ne Err =  5.961e-02, ne change =  1.049e-04
+	Q = -8.298e+00 -> -5.261e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.434e-02
+__________________________________________
+TF Iteration 4
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.806e-11, φe change =  7.058e-03
+	ne Err =  4.448e-02, ne change =  8.503e-05
+	Q = -5.261e+00 -> -3.149e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  8.022e-03
+__________________________________________
+TF Iteration 5
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.879e-11, φe change =  2.423e-03
+	ne Err =  3.954e-02, ne change =  6.825e-05
+	Q = -3.149e+00 -> -1.680e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.557e-03
+__________________________________________
+TF Iteration 6
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.873e-11, φe change =  1.594e-03
+	ne Err =  3.385e-02, ne change =  5.436e-05
+	Q = -1.680e+00 -> -6.242e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.437e-04
+__________________________________________
+TF Iteration 7
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.874e-11, φe change =  1.914e-03
+	ne Err =  2.711e-02, ne change =  4.314e-05
+	Q = -6.242e-01 ->  1.668e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.482e-03
+__________________________________________
+TF Iteration 8
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.846e-11, φe change =  1.653e-03
+	ne Err =  2.101e-02, ne change =  3.421e-05
+	Q =  1.668e-01 ->  7.772e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.419e-03
+__________________________________________
+TF Iteration 9
+	μ = -1.251616604e+00, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.684e-11, φe change =  1.208e-03
+	ne Err =  1.624e-02, ne change =  2.714e-05
+	Q =  7.772e-01 ->  1.255e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.058e-03
+__________________________________________
+TF Iteration 25
+	μ = -5.753765079e-01, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.045e-11, φe change =  2.360e-04
+	ne Err =  1.461e-03, ne change =  7.257e-07
+	Q =  1.733e+00 ->  1.745e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.478e-04
+__________________________________________
+TF Iteration 50
+	μ = -2.299329594e-01, change: 2.505270359e-01 (converged=False)
+	φe Err =  4.218e-11, φe change =  1.955e-06
+	ne Err =  1.002e-02, ne change =  5.293e-09
+	Q =  1.076e+00 ->  1.074e+00, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.005e-01
+__________________________________________
+TF Iteration 75
+	μ = -1.357328364e-01, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.018e-11, φe change =  5.222e-05
+	ne Err =  7.664e-04, ne change =  2.459e-09
+	Q =  5.111e-01 ->  5.081e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.503e-05
+__________________________________________
+TF Iteration 100
+	μ = -6.815747462e-02, change: 1.957827532e-01 (converged=False)
+	φe Err =  3.988e-11, φe change =  6.840e-07
+	ne Err =  2.520e-03, ne change =  4.921e-10
+	Q =  2.987e-01 ->  2.976e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.526e-01
+__________________________________________
+TF Iteration 125
+	μ = -4.564528809e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.006e-11, φe change =  1.335e-05
+	ne Err =  4.676e-04, ne change =  1.052e-09
+	Q =  1.446e-01 ->  1.435e-01, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.416e-05
+__________________________________________
+TF Iteration 150
+	μ = -2.925433133e-02, change: 1.132927526e-01 (converged=False)
+	φe Err =  4.087e-11, φe change =  4.684e-07
+	ne Err =  8.282e-04, ne change =  8.133e-11
+	Q =  7.806e-02 ->  7.706e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  8.477e-02
+__________________________________________
+TF Iteration 175
+	μ = -2.444118847e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.245e-11, φe change =  3.263e-06
+	ne Err =  2.872e-04, ne change =  3.399e-10
+	Q =  3.443e-02 ->  3.439e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.497e-06
+__________________________________________
+TF Iteration 200
+	μ = -1.985279808e-02, change: 6.044951304e-02 (converged=False)
+	φe Err =  4.081e-11, φe change =  8.378e-08
+	ne Err =  1.977e-04, ne change =  3.186e-11
+	Q =  2.430e-02 ->  2.432e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  4.406e-02
+__________________________________________
+TF Iteration 225
+	μ = -1.783531910e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.942e-11, φe change =  1.704e-06
+	ne Err =  8.651e-06, ne change =  1.728e-10
+	Q =  1.508e-02 ->  1.514e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.870e-06
+__________________________________________
+TF Iteration 250
+	μ = -1.571044996e-02, change: 3.780314391e-02 (converged=False)
+	φe Err =  3.760e-11, φe change =  9.653e-08
+	ne Err =  9.320e-05, ne change =  1.496e-11
+	Q =  1.171e-02 ->  1.174e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.724e-02
+__________________________________________
+TF Iteration 275
+	μ = -1.467649540e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.228e-11, φe change =  1.031e-06
+	ne Err =  6.240e-06, ne change =  1.028e-10
+	Q =  8.058e-03 ->  8.124e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.140e-06
+__________________________________________
+TF Iteration 300
+	μ = -1.348576286e-02, change: 2.589309211e-02 (converged=False)
+	φe Err =  4.002e-11, φe change =  8.278e-08
+	ne Err =  5.350e-05, ne change =  8.574e-12
+	Q =  6.797e-03 ->  6.822e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.855e-02
+__________________________________________
+TF Iteration 325
+	μ = -1.285875638e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.924e-11, φe change =  7.023e-07
+	ne Err =  5.060e-06, ne change =  6.919e-11
+	Q =  5.048e-03 ->  5.104e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  7.793e-07
+__________________________________________
+TF Iteration 350
+	μ = -1.209036940e-02, change: 1.922028666e-02 (converged=False)
+	φe Err =  4.026e-11, φe change =  6.804e-08
+	ne Err =  3.505e-05, ne change =  5.641e-12
+	Q =  4.507e-03 ->  4.527e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.372e-02
+__________________________________________
+TF Iteration 375
+	μ = -1.166349022e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.168e-11, φe change =  5.198e-07
+	ne Err =  4.192e-06, ne change =  5.083e-11
+	Q =  3.526e-03 ->  3.571e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.782e-07
+__________________________________________
+TF Iteration 400
+	μ = -1.111715256e-02, change: 1.517683573e-02 (converged=False)
+	φe Err =  3.906e-11, φe change =  5.665e-08
+	ne Err =  2.517e-05, ne change =  4.067e-12
+	Q =  3.275e-03 ->  3.292e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.081e-02
+__________________________________________
+TF Iteration 425
+	μ = -1.080170068e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.135e-11, φe change =  4.090e-07
+	ne Err =  3.558e-06, ne change =  3.982e-11
+	Q =  2.661e-03 ->  2.699e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  4.557e-07
+__________________________________________
+TF Iteration 450
+	μ = -1.038429783e-02, change: 1.261254463e-02 (converged=False)
+	φe Err =  4.102e-11, φe change =  4.840e-08
+	ne Err =  1.938e-05, ne change =  3.142e-12
+	Q =  2.548e-03 ->  2.563e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  8.975e-03
+__________________________________________
+TF Iteration 475
+	μ = -1.013537995e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.939e-11, φe change =  3.398e-07
+	ne Err =  3.120e-06, ne change =  3.299e-11
+	Q =  2.138e-03 ->  2.172e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.790e-07
+__________________________________________
+TF Iteration 500
+	μ = -9.794984556e-03, change: 1.107976092e-02 (converged=False)
+	φe Err =  3.899e-11, φe change =  4.305e-08
+	ne Err =  1.597e-05, ne change =  2.589e-12
+	Q =  2.114e-03 ->  2.128e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  7.878e-03
+__________________________________________
+TF Iteration 525
+	μ = -9.584262893e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.000e-11, φe change =  3.009e-07
+	ne Err =  2.872e-06, ne change =  2.918e-11
+	Q =  1.843e-03 ->  1.875e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.360e-07
+__________________________________________
+TF Iteration 550
+	μ = -9.282541298e-03, change: 1.059197927e-02 (converged=False)
+	φe Err =  4.215e-11, φe change =  4.090e-08
+	ne Err =  1.443e-05, ne change =  2.316e-12
+	Q =  1.907e-03 ->  1.923e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  7.529e-03
+__________________________________________
+TF Iteration 575
+	μ = -9.084449016e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.937e-11, φe change =  2.964e-07
+	ne Err =  2.911e-06, ne change =  2.877e-11
+	Q =  1.769e-03 ->  1.805e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.313e-07
+__________________________________________
+TF Iteration 600
+	μ = -8.777930902e-03, change: 1.176847585e-02 (converged=False)
+	φe Err =  4.013e-11, φe change =  4.412e-08
+	ne Err =  1.517e-05, ne change =  2.366e-12
+	Q =  1.978e-03 ->  1.999e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  8.371e-03
+__________________________________________
+TF Iteration 625
+	μ = -8.556643955e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.966e-11, φe change =  3.495e-07
+	ne Err =  3.525e-06, ne change =  3.406e-11
+	Q =  2.026e-03 ->  2.077e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.910e-07
+__________________________________________
+TF Iteration 650
+	μ = -8.174857240e-03, change: 1.634637075e-02 (converged=False)
+	φe Err =  3.904e-11, φe change =  5.848e-08
+	ne Err =  1.970e-05, ne change =  2.944e-12
+	Q =  2.516e-03 ->  2.550e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.165e-02
+__________________________________________
+TF Iteration 675
+	μ = -7.869077397e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.253e-11, φe change =  5.135e-07
+	ne Err =  5.382e-06, ne change =  5.044e-11
+	Q =  2.865e-03 ->  2.947e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.752e-07
+__________________________________________
+TF Iteration 700
+	μ = -7.297704530e-03, change: 2.771375508e-02 (converged=False)
+	φe Err =  4.079e-11, φe change =  9.523e-08
+	ne Err =  3.002e-05, ne change =  4.349e-12
+	Q =  3.811e-03 ->  3.861e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.987e-02
+__________________________________________
+TF Iteration 725
+	μ = -6.818298727e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.390e-11, φe change =  8.673e-07
+	ne Err =  9.643e-06, ne change =  8.625e-11
+	Q =  4.572e-03 ->  4.707e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.729e-07
+__________________________________________
+TF Iteration 750
+	μ = -5.891808880e-03, change: 5.492452542e-02 (converged=False)
+	φe Err =  4.059e-11, φe change =  1.751e-07
+	ne Err =  4.895e-05, ne change =  6.857e-12
+	Q =  6.257e-03 ->  6.329e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.992e-02
+__________________________________________
+TF Iteration 775
+	μ = -5.070526230e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.958e-11, φe change =  1.685e-06
+	ne Err =  2.035e-05, ne change =  1.721e-10
+	Q =  8.168e-03 ->  8.430e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.895e-06
+__________________________________________
+TF Iteration 800
+	μ = -3.302901031e-03, change: 1.719059639e-01 (converged=False)
+	φe Err =  4.053e-11, φe change =  4.019e-07
+	ne Err =  9.678e-05, ne change =  1.204e-11
+	Q =  1.244e-02 ->  1.258e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.324e-01
+__________________________________________
+TF Iteration 825
+	μ = -1.473929452e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.975e-11, φe change =  4.671e-06
+	ne Err =  6.294e-05, ne change =  5.160e-10
+	Q =  2.011e-02 ->  2.088e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.270e-06
+__________________________________________
+TF Iteration 850
+	μ = 3.426622417e-03, change: 1.485451804e+00 (converged=False)
+	φe Err =  4.014e-11, φe change =  1.373e-06
+	ne Err =  2.894e-04, ne change =  2.287e-11
+	Q =  3.757e-02 ->  3.804e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.545e-01
+__________________________________________
+TF Iteration 875
+	μ = 9.238756940e-03, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.080e-11, φe change =  1.432e-05
+	ne Err =  1.973e-04, ne change =  1.637e-09
+	Q =  6.456e-02 ->  6.663e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.616e-05
+__________________________________________
+TF Iteration 900
+	μ = 2.156802218e-02, change: 2.566328789e-01 (converged=False)
+	φe Err =  4.098e-11, φe change =  2.532e-06
+	ne Err =  7.220e-04, ne change =  7.939e-11
+	Q =  8.661e-02 ->  8.733e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.598e-01
+__________________________________________
+TF Iteration 925
+	μ = 3.063258997e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.887e-11, φe change =  1.510e-05
+	ne Err =  2.251e-04, ne change =  1.503e-09
+	Q =  8.382e-02 ->  8.508e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.694e-05
+__________________________________________
+TF Iteration 950
+	μ = 4.275349753e-02, change: 9.516877716e-02 (converged=False)
+	φe Err =  4.048e-11, φe change =  1.745e-06
+	ne Err =  7.093e-04, ne change =  9.072e-11
+	Q =  7.693e-02 ->  7.726e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  6.417e-02
+__________________________________________
+TF Iteration 975
+	μ = 4.905086551e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.914e-11, φe change =  8.444e-06
+	ne Err =  1.556e-04, ne change =  7.898e-10
+	Q =  5.349e-02 ->  5.379e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.424e-06
+__________________________________________
+TF Iteration 1000
+	μ = 5.582594974e-02, change: 3.592017573e-02 (converged=False)
+	φe Err =  3.908e-11, φe change =  8.120e-07
+	ne Err =  4.010e-04, ne change =  5.232e-11
+	Q =  4.116e-02 ->  4.125e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.495e-02
+__________________________________________
+TF Iteration 1025
+	μ = 5.889203867e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.992e-11, φe change =  3.807e-06
+	ne Err =  7.882e-05, ne change =  3.489e-10
+	Q =  2.537e-02 ->  2.542e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  4.240e-06
+__________________________________________
+TF Iteration 1050
+	μ = 6.194628307e-02, change: 1.391254755e-02 (converged=False)
+	φe Err =  4.143e-11, φe change =  3.409e-07
+	ne Err =  1.823e-04, ne change =  2.374e-11
+	Q =  1.828e-02 ->  1.830e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.770e-03
+__________________________________________
+TF Iteration 1075
+	μ = 6.325924743e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.042e-11, φe change =  1.584e-06
+	ne Err =  3.445e-05, ne change =  1.441e-10
+	Q =  1.076e-02 ->  1.077e-02, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.763e-06
+__________________________________________
+TF Iteration 1100
+	μ = 6.452963414e-02, change: 5.453215444e-03 (converged=False)
+	φe Err =  4.151e-11, φe change =  1.379e-07
+	ne Err =  7.615e-05, ne change =  9.890e-12
+	Q =  7.559e-03 ->  7.568e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.846e-03
+__________________________________________
+TF Iteration 1125
+	μ = 6.506503121e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.004e-11, φe change =  6.386e-07
+	ne Err =  1.417e-05, ne change =  5.796e-11
+	Q =  4.374e-03 ->  4.374e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  7.105e-07
+__________________________________________
+TF Iteration 1150
+	μ = 6.557724058e-02, change: 2.147839910e-03 (converged=False)
+	φe Err =  3.987e-11, φe change =  5.499e-08
+	ne Err =  3.076e-05, ne change =  3.987e-12
+	Q =  3.041e-03 ->  3.044e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.517e-03
+__________________________________________
+TF Iteration 1175
+	μ = 6.579144655e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.800e-11, φe change =  2.544e-07
+	ne Err =  5.690e-06, ne change =  2.307e-11
+	Q =  1.748e-03 ->  1.747e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.830e-07
+__________________________________________
+TF Iteration 1200
+	μ = 6.599546797e-02, change: 8.476644372e-04 (converged=False)
+	φe Err =  3.857e-11, φe change =  2.180e-08
+	ne Err =  1.226e-05, ne change =  1.588e-12
+	Q =  1.210e-03 ->  1.211e-03, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.992e-04
+__________________________________________
+TF Iteration 1225
+	μ = 6.608052216e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.054e-11, φe change =  1.008e-07
+	ne Err =  2.263e-06, ne change =  9.139e-12
+	Q =  6.936e-04 ->  6.934e-04, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.122e-07
+__________________________________________
+TF Iteration 1250
+	μ = 6.616139849e-02, change: 3.348146208e-04 (converged=False)
+	φe Err =  4.048e-11, φe change =  8.627e-09
+	ne Err =  4.860e-06, ne change =  6.281e-13
+	Q =  4.796e-04 ->  4.801e-04, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.367e-04
+__________________________________________
+TF Iteration 1275
+	μ = 6.619507790e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.064e-11, φe change =  3.988e-08
+	ne Err =  8.956e-07, ne change =  3.612e-12
+	Q =  2.745e-04 ->  2.745e-04, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  4.436e-08
+__________________________________________
+TF Iteration 1300
+	μ = 6.622707380e-02, change: 1.322426011e-04 (converged=False)
+	φe Err =  3.975e-11, φe change =  3.414e-09
+	ne Err =  1.924e-06, ne change =  2.518e-13
+	Q =  1.897e-04 ->  1.899e-04, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.351e-05
+__________________________________________
+TF Iteration 1325
+	μ = 6.624038958e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.982e-11, φe change =  1.578e-08
+	ne Err =  3.547e-07, ne change =  1.430e-12
+	Q =  1.086e-04 ->  1.085e-04, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.755e-08
+__________________________________________
+TF Iteration 1350
+	μ = 6.625303864e-02, change: 5.226008097e-05 (converged=False)
+	φe Err =  4.064e-11, φe change =  1.351e-09
+	ne Err =  7.607e-07, ne change =  9.958e-14
+	Q =  7.501e-05 ->  7.508e-05, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.695e-05
+__________________________________________
+TF Iteration 1375
+	μ = 6.625830273e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.055e-11, φe change =  6.237e-09
+	ne Err =  1.402e-07, ne change =  5.672e-13
+	Q =  4.291e-05 ->  4.290e-05, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  6.938e-09
+__________________________________________
+TF Iteration 1400
+	μ = 6.626330262e-02, change: 2.065244957e-05 (converged=False)
+	φe Err =  3.958e-11, φe change =  5.307e-10
+	ne Err =  3.007e-07, ne change =  3.813e-14
+	Q =  2.965e-05 ->  2.967e-05, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.460e-05
+__________________________________________
+TF Iteration 1425
+	μ = 6.626538322e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.977e-11, φe change =  2.468e-09
+	ne Err =  5.542e-08, ne change =  2.255e-13
+	Q =  1.696e-05 ->  1.696e-05, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.745e-09
+__________________________________________
+TF Iteration 1450
+	μ = 6.626735929e-02, change: 8.161575419e-06 (converged=True)
+	φe Err =  3.864e-11, φe change =  2.066e-10
+	ne Err =  1.188e-07, ne change =  1.006e-14
+	Q =  1.172e-05 ->  1.173e-05, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.771e-06
+__________________________________________
+TF Iteration 1475
+	μ = 6.626818156e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.152e-11, φe change =  9.737e-10
+	ne Err =  2.190e-08, ne change =  8.678e-14
+	Q =  6.703e-06 ->  6.701e-06, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.083e-09
+__________________________________________
+TF Iteration 1500
+	μ = 6.626896250e-02, change: 3.225349842e-06 (converged=True)
+	φe Err =  3.951e-11, φe change =  8.958e-11
+	ne Err =  4.696e-08, ne change =  9.409e-15
+	Q =  4.631e-06 ->  4.635e-06, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.281e-06
+__________________________________________
+TF Iteration 1525
+	μ = 6.626928746e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.029e-11, φe change =  3.808e-10
+	ne Err =  8.655e-09, ne change =  3.139e-14
+	Q =  2.649e-06 ->  2.648e-06, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  4.237e-10
+__________________________________________
+TF Iteration 1550
+	μ = 6.626959609e-02, change: 1.274617825e-06 (converged=True)
+	φe Err =  3.999e-11, φe change =  3.354e-11
+	ne Err =  1.856e-08, ne change =  2.715e-15
+	Q =  1.830e-06 ->  1.832e-06, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.013e-07
+__________________________________________
+TF Iteration 1575
+	μ = 6.626972451e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.948e-11, φe change =  1.589e-10
+	ne Err =  3.420e-09, ne change =  1.629e-14
+	Q =  1.047e-06 ->  1.047e-06, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.759e-10
+__________________________________________
+TF Iteration 1600
+	μ = 6.626984647e-02, change: 5.037128643e-07 (converged=True)
+	φe Err =  4.010e-11, φe change =  1.242e-11
+	ne Err =  7.334e-09, ne change =  7.669e-16
+	Q =  7.232e-07 ->  7.239e-07, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  3.562e-07
+__________________________________________
+TF Iteration 1625
+	μ = 6.626989722e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.097e-11, φe change =  6.179e-11
+	ne Err =  1.352e-09, ne change =  5.602e-15
+	Q =  4.137e-07 ->  4.136e-07, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  6.857e-11
+__________________________________________
+TF Iteration 1650
+	μ = 6.626994542e-02, change: 1.990609222e-07 (converged=True)
+	φe Err =  4.026e-11, φe change =  8.090e-12
+	ne Err =  2.898e-09, ne change =  2.879e-15
+	Q =  2.858e-07 ->  2.861e-07, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.408e-07
+__________________________________________
+TF Iteration 1675
+	μ = 6.626996548e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.020e-11, φe change =  2.610e-11
+	ne Err =  5.342e-10, ne change =  3.443e-15
+	Q =  1.635e-07 ->  1.634e-07, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  2.856e-11
+__________________________________________
+TF Iteration 1700
+	μ = 6.626998453e-02, change: 7.866665985e-08 (converged=True)
+	φe Err =  4.108e-11, φe change =  6.949e-12
+	ne Err =  1.145e-09, ne change =  2.104e-15
+	Q =  1.129e-07 ->  1.130e-07, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  5.563e-08
+__________________________________________
+TF Iteration 1725
+	μ = 6.626999245e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  4.030e-11, φe change =  8.671e-12
+	ne Err =  2.111e-10, ne change =  4.900e-16
+	Q =  6.461e-08 ->  6.459e-08, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  9.303e-12
+__________________________________________
+TF Iteration 1730
+	μ = 6.626999245e-02, change: 0.000000000e+00 (converged=True)
+	φe Err =  3.989e-11, φe change =  6.039e-12
+	ne Err =  8.846e-11, ne change =  2.648e-15
+	Q =  6.463e-08 ->  6.470e-08, 
+	Zstar guess =  2.568e-01. Current Zstar:  2.568e-01 (converged=True)
+	Change =  1.190e-12
+	-------------------
+	Solving IET.
+0: Initial condition Total Error: 1.492e+00
+Warning: HNC_solver did not converge within the specified number of iterations.
+Exiting status 1, reverting to best index so far: 10001
+Final iter:10001, Total Error: 2.349e-03
+	-------------------
+	Solving IET.
+0: Initial condition Total Error: 2.046e+00
+QUIT: Total error infinite.
+Exiting status 1, reverting to best index so far: 6
+Final iter:21, Total Error: 8.769e-01
+Time to solve CS model: 4.354e+02 [s], time so far: 4.373e+02 [s]
+CS model saved.
+Ee_pot_density = -1.186e-01 [au], Ee_K = 6.083e-02 [au], Ee_tot = -5.775e-02 [au]
+P_e = 4.352e-05 [au], 1.280e-02 [Mbar]
+Virial if 6.574e+02 = 6.415e+02 --->  off by 2.480e+00 % 
+
+βEe_pot/Z = -30810.836, βEe_K/Z = 15804.790, βEe_tot/Z = -15006.046
+βP_e Ω/Z = 11.309

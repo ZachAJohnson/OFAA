@@ -209,3 +209,115 @@ TF Iteration 350
 	Q = -5.025e-05 -> -2.546e-05, 
 	Zstar guess =  2.361e-01. Current Zstar:  2.361e-01 (converged=False)
 	Change =  2.635e-05
+__________________________________________
+TF Iteration 375
+	μ = -6.116990409e-02, change: 5.511264778e-10 (converged=True)
+	φe Err =  4.057e-11, φe change =  9.656e-10
+	ne Err =  8.406e-08, ne change =  1.234e-13
+	Q = -1.391e-05 -> -2.336e-05, 
+	Zstar guess =  2.361e-01. Current Zstar:  2.361e-01 (converged=False)
+	Change =  1.398e-09
+__________________________________________
+TF Iteration 400
+	μ = -6.116975653e-02, change: 5.020204497e-06 (converged=True)
+	φe Err =  4.168e-11, φe change =  1.306e-11
+	ne Err =  3.865e-08, ne change =  8.378e-16
+	Q = -3.496e-07 -> -1.170e-05, 
+	Zstar guess =  2.361e-01. Current Zstar:  2.362e-01 (converged=False)
+	Change =  3.550e-06
+__________________________________________
+TF Iteration 425
+	μ = -6.116963813e-02, change: 6.239089245e-10 (converged=True)
+	φe Err =  4.124e-11, φe change =  9.523e-11
+	ne Err =  2.261e-08, ne change =  1.394e-14
+	Q =  1.148e-06 ->  4.049e-06, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  5.437e-10
+__________________________________________
+TF Iteration 450
+	μ = -6.116966073e-02, change: 7.732620944e-08 (converged=True)
+	φe Err =  3.948e-11, φe change =  2.091e-12
+	ne Err =  5.504e-09, ne change =  4.130e-16
+	Q = -2.319e-07 -> -3.357e-07, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  5.468e-08
+__________________________________________
+TF Iteration 475
+	μ = -6.116966484e-02, change: 9.960854364e-11 (converged=True)
+	φe Err =  3.986e-11, φe change =  1.811e-12
+	ne Err =  3.092e-09, ne change =  1.942e-16
+	Q = -3.203e-08 ->  2.198e-07, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  7.136e-11
+__________________________________________
+TF Iteration 500
+	μ = -6.116966178e-02, change: 1.460011591e-07 (converged=True)
+	φe Err =  3.996e-11, φe change =  9.724e-12
+	ne Err =  1.690e-09, ne change =  2.944e-15
+	Q = -4.664e-08 -> -4.325e-07, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  1.032e-07
+__________________________________________
+TF Iteration 525
+	μ = -6.116965914e-02, change: 5.501010758e-11 (converged=True)
+	φe Err =  4.049e-11, φe change =  2.229e-12
+	ne Err =  9.056e-10, ne change =  2.560e-16
+	Q =  2.694e-08 -> -7.970e-08, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  4.046e-11
+__________________________________________
+TF Iteration 550
+	μ = -6.116965379e-02, change: 1.730265708e-08 (converged=True)
+	φe Err =  3.969e-11, φe change =  4.631e-13
+	ne Err =  3.352e-10, ne change =  1.664e-15
+	Q =  3.710e-08 ->  3.740e-08, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  1.223e-08
+__________________________________________
+TF Iteration 575
+	μ = -6.116965284e-02, change: 3.055333764e-12 (converged=True)
+	φe Err =  3.997e-11, φe change =  3.327e-12
+	ne Err =  1.372e-10, ne change =  2.024e-16
+	Q =  8.196e-09 ->  7.155e-09, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  4.034e-12
+__________________________________________
+TF Iteration 587
+	μ = -6.116965264e-02, change: 1.661448756e-12 (converged=True)
+	φe Err =  4.017e-11, φe change =  1.259e-12
+	ne Err =  9.985e-11, ne change =  5.752e-16
+	Q =  4.484e-09 ->  4.337e-09, 
+	Zstar guess =  2.362e-01. Current Zstar:  2.362e-01 (converged=True)
+	Change =  1.717e-12
+/home/zach/plasma/average_atom/core/average_atom_new.py:499: RuntimeWarning: divide by zero encountered in divide
+  rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
+	-------------------
+	Solving IET.
+0: Initial condition Total Error: 1.623e+00
+/home/zach/plasma/hnc/hnc/hnc.py:648: RuntimeWarning: overflow encountered in exp
+  hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
+/home/zach/plasma/hnc/hnc/hnc.py:432: RuntimeWarning: overflow encountered in exp
+  tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
+/home/zach/plasma/hnc/hnc/hnc.py:518: RuntimeWarning: overflow encountered in exp
+  h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)
+/home/zach/plasma/hnc/hnc/hnc.py:656: RuntimeWarning: invalid value encountered in subtract
+  Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
+QUIT: Total error infinite.
+Exiting status 1, reverting to best index so far: 0
+Final iter:21, Total Error: 1.623e+00
+	-------------------
+	Solving IET.
+0: Initial condition Total Error: 1.623e+00
+QUIT: Total error infinite.
+Exiting status 1, reverting to best index so far: 0
+Final iter:21, Total Error: 1.623e+00
+Time to solve CS model: 2.332e+02 [s], time so far: 2.340e+02 [s]
+CS model saved.
+/home/zach/plasma/average_atom/core/average_atom_new.py:499: RuntimeWarning: invalid value encountered in divide
+  rel_errs = (np.abs(A @ φe - b)[:-1]/b[:-1])
+Ee_pot_density = -1.186e-01 [au], Ee_K = 6.053e-02 [au], Ee_tot = -5.804e-02 [au]
+P_e = 3.888e-07 [au], 1.144e-04 [Mbar]
+Virial if 6.542e+02 = 6.408e+02 --->  off by 2.101e+00 % 
+
+βEe_pot/Z = -3463.804, βEe_K/Z = 1768.306, βEe_tot/Z = -1695.499
+βP_e Ω/Z = 0.011

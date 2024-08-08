@@ -2,6 +2,8 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import gamma
+import mpmath as mp
+
 
 from ..fdints import fdints
 import pylibxc
@@ -10,6 +12,8 @@ import matplotlib.pyplot as plt
 
 from hnc.hnc.constants import *
 
+mp.dps = 10
+# mp.prec = 100
 
 def Fermi_Energy(ne):
     E_F = 1/(2*m_e) * (3*π**2 * ne)**(2/3)
@@ -130,6 +134,17 @@ def More_TF_Zbar( Z, n_AU, T_AU):
         
 
 ### LINEAR RESPONSE FUNCTIONS #####
+@np.vectorize
+def χ0_Lindhard_finiteT(μ, Te, k, kF):
+	highest_q =kF*100# np.max([kF*10, 0])#np.sqrt(Te)*10 ])
+	q = np.linspace(-highest_q, highest_q, num=100000)
+	dq = q[1]-q[0]
+	f_fd = lambda q: 1/(1 + np.exp( 1/Te*(q**2/2 - μ ) ))
+	integrand = q* f_fd(q) * np.log( np.abs( k**2 + 2*k*q ))
+
+	χ0 = -2/(k*2*π**2) * np.sum( integrand *dq )
+	return χ0 
+
 def χ0_Lindhard(k, kF):
     ktilde = k/(2*kF) 
     Ndos = kF/π**2
@@ -150,10 +165,17 @@ def G_SLFC(k, kF):
     G = k**2*φ0
     return G
     
-def χ_Lindhard(k, kF):
-    χ0 = χ0_Lindhard(k, kF)
+def χ_Lindhard(μ, Te, k, kF, LFC=True, finite_T=True):
+    if finite_T:
+        χ0 = χ0_Lindhard_finiteT(μ, Te, k, kF)
+    else:
+        χ0 = χ0_Lindhard(k, kF)
+        
     vee = 4*π/k**2
-    G = G_SLFC(k, kF)
+    if LFC:
+        G = G_SLFC(k, kF)
+    else:
+        G = 0
     Uee = vee*(1-G)
     χ_renorm = χ0/(1 - χ0* Uee) 
     return χ_renorm
@@ -164,6 +186,98 @@ def χ_TF(k, kTF):
     χ_lowk =  -1/( vee + 4*π/kTF**2)  # rewritten
     return χ_lowk
 
+class FermiDirac_mpmath():
+
+	def __init__(self):
+		"""
+
+		"""
+
+	@staticmethod
+	@np.vectorize
+	def Fj(j, eta):
+		if eta>1e8: # degenerate limit
+			return 4*eta**1.5/(3*np.sqrt(π))
+		elif eta<-40.:
+			return np.exp(eta) # non-degen limit
+		else:
+			Fj_of_eta =  -mp.polylog(j+1, -mp.exp(eta)) # in weird mpmath object format
+			return float(Fj_of_eta.real)
+
+	@staticmethod
+	@np.vectorize
+	def Fminusonehalf(eta):
+		return FermiDirac.Fj(-1/2, eta)
+
+	@staticmethod
+	@np.vectorize
+	def Fonehalf(eta):
+		# return FermiDirac.Fj(1/2, eta)
+		return fdints.fonehalf(float(eta))
+
+	@staticmethod
+	@np.vectorize
+	def Fthreehalf(eta):
+		return FermiDirac.Fj(3/2, eta)
+
+	@staticmethod
+	@np.vectorize
+	def Fminusonehalfprime(eta):
+		eps = eta*1e-6
+		return (FermiDirac.Fminusonehalf(eta + eps) - FermiDirac.Fminusonehalf(eta-eps))/(2*eps)
+
+	@staticmethod
+	@np.vectorize
+	def Iminusonehalf(eta):
+		l=-1/2
+		return gamma(l+1)*FermiDirac.Fminusonehalf(eta)
+
+	@staticmethod
+	@np.vectorize
+	def Ionehalf(eta):
+		# l=1/2
+		# return gamma(l+1)*FermiDirac.Fonehalf(eta)
+		# return np.sqrt(np.pi)/2*FermiDirac.Fonehalf(eta)
+		return 0.886227*FermiDirac.Fonehalf(eta)
+		
+
+	@staticmethod
+	@np.vectorize
+	def Ithreehalf(eta):
+		l=3/2
+		return gamma(l+1)*FermiDirac.Fthreehalf(eta)
+
+	@staticmethod
+	@np.vectorize
+	def Iminusonehalfprime(eta):
+		l=-1/2
+		return gamma(l+1)*FermiDirac.Fminusonehalfprime(eta)
+
+	@staticmethod
+	@np.vectorize
+	def inc_lower_Ionehalf(xmid, eta):
+		"""
+		Accurate to <1e-4 for eta>1e4, better (<1e-6 for below.)
+		Bad relative error for eta<1e-2, but great absolute error 
+		"""
+		if 1e2 + eta<xmid: # So xmid effectively infinite compared to eta
+			return FermiDirac.Ionehalf(eta)
+		else:
+			integrand = lambda x:  (x**0.5/(np.exp(x-eta) + 1)).real
+			integral, info = quad(integrand, 0, xmid)
+			return integral
+
+	@staticmethod
+	@np.vectorize
+	def inc_upper_Ionehalf(xmid, eta): 
+		"""
+		Accurate to <1e-4 for eta>1e4, better (<1e-6 for below.)
+		Bad relative error for eta<1e-2, but great absolute error 
+		"""
+		integrand = lambda x:  (x**0.5/(np.exp(x-eta) + 1)).real
+		x_infinite = 2*eta+1e2 # max(eta*100,1e3) #Upper limit (approx infinity)
+		integral, info = quad(integrand, xmid, x_infinite, limit=50, epsabs=1e-15, epsrel=1e-5) # x0 to infinity
+		return integral
 
 
 class FermiDirac():
@@ -172,6 +286,7 @@ class FermiDirac():
 		"""
 
 		"""
+
 
 	@staticmethod
 	@np.vectorize
@@ -220,7 +335,7 @@ class FermiDirac():
 	def Iminusonehalfprime(eta):
 		l=-1/2
 		return gamma(l+1)*FermiDirac.Fminusonehalfprime(eta)
-	
+
 	@staticmethod
 	@np.vectorize
 	def inc_lower_Ionehalf(xmid, eta):
@@ -246,8 +361,6 @@ class FermiDirac():
 		x_infinite = 2*eta+1e2 # max(eta*100,1e3) #Upper limit (approx infinity)
 		integral, info = quad(integrand, xmid, x_infinite, limit=50, epsabs=1e-15, epsrel=1e-5) # x0 to infinity
 		return integral
-
-
 
 
 class ThomasFermi():
@@ -309,15 +422,16 @@ class ThomasFermi():
 		print("T: ", self.T)
 		ηs = np.sort(np.concatenate([np.geomspace(1e-4,1e5,num=1000),-np.geomspace(1e-4,10**(2.5),num=1000)]))
 		ρs = self.n_TF(self.T, ηs)
+		ρ_min, ρ_max = np.min(ρs), np.max(ρs)
+
 		η_logged = interp1d(np.log(ρs), ηs, kind='linear')#, bounds_error=None, fill_value = [])
-		# η = lambda ρ: η_logged(np.log(ρ))
 		def η(ρ):
-			if ρ<=0:
+			if ρ<=0: # Unphysical negative density
 				return -1e50 #infinity
-			elif ρ<1e-8:
-				return np.log( 4*ρ*(π/2/self.T)**1.5 )
-			elif ρ>1e2:
-				return 1/(2*self.T) * (3*π**2*ρ)**(2/3)
+			elif ρ<ρ_min: # Non-degenerate limit
+				return np.log( 4*ρ*(π/2/self.T)**1.5 ) # Boltzmann exponential limit
+			elif ρ>ρ_max: # Degenerate Limit,  η >> 1, analagous to μ>>T
+				return 1/(2*self.T) * (3*π**2*ρ)**(2/3) # β E_F
 			else: 
 				return η_logged(np.log(ρ))
 		return η
