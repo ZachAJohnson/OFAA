@@ -136,7 +136,7 @@ def More_TF_Zbar( Z, n_AU, T_AU):
 ### LINEAR RESPONSE FUNCTIONS #####
 @np.vectorize
 def χ0_Lindhard_finiteT(μ, Te, k, kF):
-	highest_q =kF*100# np.max([kF*10, 0])#np.sqrt(Te)*10 ])
+	highest_q = kF*100# np.max([kF*10, 0])#np.sqrt(Te)*10 ])
 	q = np.linspace(-highest_q, highest_q, num=100000)
 	dq = q[1]-q[0]
 	f_fd = lambda q: 1/(1 + np.exp( 1/Te*(q**2/2 - μ ) ))
