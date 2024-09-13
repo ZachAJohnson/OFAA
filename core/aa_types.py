@@ -4,7 +4,7 @@ import numpy as np
 import os
 from .config import CORE_DIR, PACKAGE_DIR
 
-from .average_atom_new import AverageAtom
+from .average_atom import AverageAtom
 from .solvers import jacobi_relaxation, sor, gmres_ilu, tridiagsolve, Ndiagsolve
 from hnc.hnc.constants import *
 
